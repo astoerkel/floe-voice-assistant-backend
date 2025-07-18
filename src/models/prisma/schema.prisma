@@ -1,0 +1,437 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  name              String?
+  provider          String   @default("apple") // 'apple', 'google', 'email'
+  providerId        String?
+  appleId           String?  @unique
+  googleId          String?  @unique
+  passwordHash      String?
+  profilePicture    String?
+  
+  // Subscription fields
+  subscriptionStatus String   @default("trial")
+  subscriptionPlan   String   @default("trial")
+  trialStartsAt      DateTime @default(now())
+  trialEndsAt        DateTime?
+  subscriptionEndsAt DateTime?
+  
+  // Usage tracking
+  commandsThisMonth  Int      @default(0)
+  commandsTotal      Int      @default(0)
+  lastCommandAt      DateTime?
+  lastResetAt        DateTime @default(now())
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  lastActive        DateTime @default(now())
+  isActive          Boolean  @default(true)
+  role              String   @default("user") // user, admin
+  
+  // Relationships
+  integrations      Integration[]
+  voiceCommands     VoiceCommand[]
+  conversations     Conversation[]
+  refreshTokens     RefreshToken[]
+  devices           Device[]
+  notifications     Notification[]
+  notificationPreferences NotificationPreference?
+  transcriptionEvents TranscriptionEvent[]
+
+  @@index([email])
+  @@index([subscriptionStatus])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  isRevoked Boolean  @default(false)
+  
+  // Relationships
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model Integration {
+  id           String   @id @default(cuid())
+  userId       String
+  type         String   // 'google', 'airtable', 'google_calendar', 'gmail', 'google_drive'
+  
+  // OAuth tokens
+  accessToken  String   @db.Text
+  refreshToken String?  @db.Text
+  tokenType    String   @default("Bearer")
+  expiresAt    DateTime?
+  scope        String?  @db.Text
+  
+  // Integration metadata
+  isActive     Boolean  @default(true)
+  lastSyncAt   DateTime?
+  syncErrors   Json?
+  
+  // Service-specific data
+  serviceData  Json?    // Store service-specific info (calendar IDs, base IDs, etc.)
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, type])
+  @@index([userId])
+  @@index([type])
+  @@index([expiresAt])
+  @@map("integrations")
+}
+
+model VoiceCommand {
+  id               String   @id @default(cuid())
+  userId           String
+  conversationId   String?
+  transcription    String?
+  text             String?
+  audioUrl         String?
+  audioSize        Int?     // Size in bytes
+  audioFormat      String?  // mp3, wav, etc.
+  transcriptionMethod String @default("apple_speech") // 'apple_speech', 'whisper'
+  intent           String?
+  agentUsed        String?  // coordinator, calendar, email, task, weather
+  response         String?
+  responseAudio    String?  // Base64 encoded audio response
+  responseAudioUrl String?
+  status           String   @default("pending") // pending, processing, completed, failed
+  executionTime    Int?     // milliseconds
+  platform         String   @default("ios") // ios, watchos, web
+  error            String?
+  completedAt      DateTime?
+  metadata         Json?    // Additional data like locations, entities, etc.
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  
+  // Relationships
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("voice_commands")
+}
+
+model TranscriptionEvent {
+  id              String   @id @default(cuid())
+  userId          String
+  method          String   // 'apple_speech', 'whisper'
+  platform        String   // 'ios', 'watchos', 'web'
+  success         Boolean
+  processingTime  Int?     // milliseconds
+  audioLength     Float?   // seconds
+  errorMessage    String?
+  createdAt       DateTime @default(now())
+  
+  // Relationships
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, createdAt])
+  @@index([method, platform])
+  @@map("transcription_events")
+}
+
+model Conversation {
+  id        String   @id @default(cuid())
+  userId    String
+  sessionId String?  @unique
+  title     String?
+  context   Json?    // Conversation context and memory
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relationships
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  ConversationMessage[]
+
+  @@map("conversations")
+}
+
+model CalendarEvent {
+  id          String   @id @default(cuid())
+  userId      String
+  externalId  String?  // Google Calendar event ID
+  title       String
+  description String?
+  location    String?
+  startTime   DateTime
+  endTime     DateTime
+  isAllDay    Boolean  @default(false)
+  status      String   @default("confirmed") // confirmed, cancelled, tentative
+  attendees   Json?    // Array of attendees
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([userId, externalId])
+  @@map("calendar_events")
+}
+
+model Email {
+  id          String   @id @default(cuid())
+  userId      String
+  externalId  String?  // Gmail message ID
+  threadId    String?
+  subject     String
+  body        String
+  from        String
+  to          String[]
+  cc          String[]
+  bcc         String[]
+  isRead      Boolean  @default(false)
+  isImportant Boolean  @default(false)
+  labels      String[]
+  receivedAt  DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([userId, externalId])
+  @@map("emails")
+}
+
+model Task {
+  id           String   @id @default(cuid())
+  userId       String
+  externalId   String?  // Airtable record ID
+  title        String
+  description  String?
+  status       String   @default("todo") // todo, in_progress, completed, cancelled
+  priority     String   @default("medium") // low, medium, high, urgent
+  dueDate      DateTime?
+  completedAt  DateTime?
+  tags         String[]
+  metadata     Json?    // Additional task data
+  provider     String   @default("airtable") // airtable, internal
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  @@unique([externalId, userId])
+  @@map("tasks")
+}
+
+model WeatherCache {
+  id          String   @id @default(cuid())
+  location    String   @unique
+  data        Json     // Weather data
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  
+  @@map("weather_cache")
+}
+
+model AudioFile {
+  id        String   @id @default(cuid())
+  filename  String   @unique
+  originalName String
+  mimeType  String
+  size      Int      // Size in bytes
+  duration  Int?     // Duration in milliseconds
+  path      String   // File path on disk
+  url       String   // Public URL
+  userId    String?
+  createdAt DateTime @default(now())
+  
+  @@map("audio_files")
+}
+
+model JobQueue {
+  id          String   @id @default(cuid())
+  name        String
+  data        Json
+  status      String   @default("pending") // pending, processing, completed, failed
+  attempts    Int      @default(0)
+  maxAttempts Int      @default(3)
+  priority    Int      @default(0)
+  delay       Int      @default(0)
+  processedAt DateTime?
+  failedAt    DateTime?
+  completedAt DateTime?
+  error       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("job_queue")
+}
+
+model SystemConfig {
+  id    String @id @default(cuid())
+  key   String @unique
+  value Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("system_config")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String   // create, update, delete, login, logout
+  resource  String   // user, integration, voice_command, etc.
+  resourceId String?
+  details   Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  
+  @@map("audit_logs")
+}
+
+model Device {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  type        String   // ios, watchos, android
+  pushToken   String?  @unique
+  osVersion   String?
+  appVersion  String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relationships
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notifications Notification[]
+  
+  @@map("devices")
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String
+  deviceId    String?
+  type        String   // push, email, sms
+  title       String
+  body        String
+  category    String?
+  status      String   @default("pending") // pending, sent, failed
+  sentAt      DateTime?
+  error       String?
+  createdAt   DateTime @default(now())
+  
+  // Relationships
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  device      Device?  @relation(fields: [deviceId], references: [id])
+  
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  pushEnabled   Boolean  @default(true)
+  emailEnabled  Boolean  @default(true)
+  smsEnabled    Boolean  @default(false)
+  quietHoursStart String? // HH:MM format
+  quietHoursEnd   String? // HH:MM format
+  categories    Json?    // Category-specific preferences
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Relationships
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("notification_preferences")
+}
+
+model ConversationMessage {
+  id             String   @id @default(cuid())
+  conversationId String
+  role           String   // user, assistant, system
+  content        String
+  audioData      String?  // Base64 encoded audio
+  metadata       Json?
+  createdAt      DateTime @default(now())
+  
+  // Relationships
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  
+  @@map("conversation_messages")
+}
+
+model EmailActivity {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String   // sent, received, read, archived
+  emailId   String?
+  subject   String?
+  to        String?
+  from      String?
+  sentAt    DateTime?
+  createdAt DateTime @default(now())
+  
+  @@map("email_activities")
+}
+
+model CalendarActivity {
+  id          String   @id @default(cuid())
+  userId      String
+  action      String   // created, updated, deleted, attended
+  eventId     String?
+  eventTitle  String?
+  eventStart  DateTime?
+  eventEnd    DateTime?
+  createdAt   DateTime @default(now())
+  
+  @@map("calendar_activities")
+}
+
+model SyncStatus {
+  id          String   @id @default(cuid())
+  userId      String
+  syncType    String   // email, calendar, tasks
+  lastSyncAt  DateTime
+  itemsSynced Int      @default(0)
+  status      String   @default("success") // success, failed, partial
+  error       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([userId, syncType])
+  @@map("sync_status")
+}
+
+model TaskActivity {
+  id          String   @id @default(cuid())
+  userId      String
+  taskId      String
+  action      String   // created, updated, completed, deleted
+  changes     Json?    // Field changes
+  createdAt   DateTime @default(now())
+  
+  @@map("task_activities")
+}
+
+model OAuthState {
+  id          String   @id @default(cuid())
+  state       String   @unique
+  userId      String?
+  provider    String   // 'google', 'airtable'
+  returnUrl   String?
+  codeVerifier String? // For PKCE
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime
+  
+  @@index([state])
+  @@index([expiresAt])
+  @@map("oauth_states")
+}

@@ -1,0 +1,35 @@
+steps:
+  # Configure Docker authentication for Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['auth', 'configure-docker', 'us-central1-docker.pkg.dev']
+
+  # Build the Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/voice-assistant/backend:$COMMIT_SHA'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/voice-assistant/backend:latest'
+      - '.'
+
+  # Push the Docker image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/voice-assistant/backend:$COMMIT_SHA'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/voice-assistant/backend:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_HIGHCPU_8'
+
+timeout: 1200s
+
+images:
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/voice-assistant/backend:$COMMIT_SHA'
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/voice-assistant/backend:latest'

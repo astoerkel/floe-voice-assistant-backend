@@ -1,0 +1,23 @@
+{
+  "timestamp": "2025-07-18T12:00:45.071Z",
+  "environment": "development",
+  "backendUrl": "not set",
+  "oauthProviders": {
+    "google": {
+      "clientId": "not configured",
+      "clientSecret": "not configured"
+    },
+    "airtable": {
+      "clientId": "not configured",
+      "clientSecret": "not configured"
+    }
+  },
+  "database": {
+    "url": "not configured",
+    "redis": "not configured"
+  },
+  "security": {
+    "jwtSecret": "not configured",
+    "jwtRefreshSecret": "not configured"
+  }
+}

@@ -1,0 +1,7 @@
+[[build.env]]
+name = "GOOGLE_NODE_RUN_SCRIPTS"
+value = "true"
+
+[[build.env]]
+name = "NODE_ENV"
+value = "production"

@@ -1,0 +1,78 @@
+{
+  "name": "voice-assistant-backend",
+  "version": "1.0.0",
+  "description": "Node.js/Express backend for Voice Assistant with LangChain agents",
+  "main": "src/app.js",
+  "prisma": {
+    "schema": "src/models/prisma/schema.prisma"
+  },
+  "scripts": {
+    "start": "node start.js",
+    "start:simple": "node simple-start.js",
+    "dev": "nodemon src/app.js",
+    "build": "npx prisma generate",
+    "worker": "node src/services/queue/worker.js",
+    "migrate": "npx prisma migrate deploy",
+    "postinstall": "npx prisma generate",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "validate-deployment": "node scripts/validate-deployment.js",
+    "deploy-migrations": "node scripts/deploy-migrations.js",
+    "deploy-oauth": "node scripts/deploy-oauth.js",
+    "deploy-railway": "node scripts/deploy-railway.js",
+    "oauth-setup": "npm run validate-deployment && npm run deploy-migrations"
+  },
+  "keywords": [
+    "voice-assistant",
+    "langchain",
+    "ai",
+    "express",
+    "railway"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@google-cloud/text-to-speech": "^5.0.1",
+    "@langchain/google-genai": "^0.0.8",
+    "@langchain/openai": "^0.0.12",
+    "@prisma/client": "^5.7.1",
+    "airtable": "^0.12.2",
+    "apple-signin-auth": "^1.7.6",
+    "axios": "^1.6.2",
+    "bcryptjs": "^2.4.3",
+    "bull": "^4.12.2",
+    "bullmq": "^4.17.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.1.5",
+    "express-validator": "^7.0.1",
+    "form-data": "^4.0.0",
+    "googleapis": "^129.0.0",
+    "helmet": "^7.1.0",
+    "ioredis": "^5.3.2",
+    "joi": "^17.11.0",
+    "jsonwebtoken": "^9.0.2",
+    "langchain": "^0.1.0",
+    "morgan": "^1.10.0",
+    "multer": "^1.4.5-lts.1",
+    "openai": "^4.24.7",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0",
+    "passport-jwt": "^4.0.1",
+    "prisma": "^5.7.1",
+    "socket.io": "^4.7.4",
+    "uuid": "^9.0.1",
+    "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.8",
+    "jest": "^29.7.0",
+    "nodemon": "^3.0.2",
+    "supertest": "^6.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}
