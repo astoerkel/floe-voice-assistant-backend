@@ -25,14 +25,7 @@ const shouldUseRedis = process.env.REDIS_URL &&
   !process.env.REDIS_URL.includes('railway.internal') &&
   !process.env.DISABLE_REDIS;
 
-const connection = shouldUseRedis ? {
-  host: process.env.REDIS_HOST || 'localhost',
-  port: process.env.REDIS_PORT || 6379,
-  password: process.env.REDIS_PASSWORD,
-  maxRetriesPerRequest: 3,
-  enableReadyCheck: false,
-  url: process.env.REDIS_URL
-} : null;
+const connection = shouldUseRedis ? process.env.REDIS_URL : null;
 
 // Queue names
 const QUEUE_NAMES = {

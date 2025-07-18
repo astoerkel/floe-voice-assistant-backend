@@ -46,3 +46,5 @@ cloudbuild*.yaml
 .dockerignore
 gcp-setup.sh
 DEPLOYMENT-GUIDE-GCP.md
+google-cloud-sdk/
+google-cloud-cli-darwin-x86_64.tar.gz

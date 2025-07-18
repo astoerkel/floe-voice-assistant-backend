@@ -10,8 +10,11 @@ COPY package*.json ./
 # Install production dependencies only, skip scripts
 RUN npm ci --only=production --ignore-scripts
 
-# Copy the application including pre-generated Prisma client
+# Copy the application
 COPY . .
+
+# Generate Prisma client
+RUN npx prisma generate
 
 # Expose port
 EXPOSE 8080

@@ -150,8 +150,11 @@ const disconnectRedis = async () => {
   }
 };
 
+// Export a getter for redis to ensure we always get the current value
 module.exports = {
-  redis,
+  get redis() {
+    return redis || mockRedisClient;
+  },
   connectRedis,
   disconnectRedis,
   isRedisAvailable: () => isRedisAvailable
