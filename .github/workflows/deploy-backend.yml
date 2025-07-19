@@ -89,40 +89,20 @@ jobs:
       
       - name: Deploy to Cloud Run
         run: |
-          # Check if service exists
-          if gcloud run services describe ${{ env.SERVICE_NAME }} --region=${{ env.REGION }} --format="value(name)" 2>/dev/null; then
-            echo "Service exists, clearing all env vars first..."
-            # Clear all existing env vars to avoid type conflicts
-            gcloud run services update ${{ env.SERVICE_NAME }} \
-              --region ${{ env.REGION }} \
-              --clear-env-vars || true
-            
-            echo "Deploying with fresh env vars..."
-            gcloud run deploy ${{ env.SERVICE_NAME }} \
-              --image gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
-              --platform managed \
-              --region ${{ env.REGION }} \
-              --allow-unauthenticated \
-              --memory=2Gi \
-              --cpu=2 \
-              --timeout=300 \
-              --min-instances=1 \
-              --max-instances=10 \
-              --set-env-vars="NODE_ENV=production,API_KEY_ENV=${{ secrets.API_KEY }},OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}"
-          else
-            echo "Service does not exist, creating with initial env vars..."
-            gcloud run deploy ${{ env.SERVICE_NAME }} \
-              --image gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
-              --platform managed \
-              --region ${{ env.REGION }} \
-              --allow-unauthenticated \
-              --memory=2Gi \
-              --cpu=2 \
-              --timeout=300 \
-              --min-instances=1 \
-              --max-instances=10 \
-              --set-env-vars="NODE_ENV=production,API_KEY_ENV=${{ secrets.API_KEY }},OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}"
-          fi
+          # Always deploy with clear-env-vars and set-env-vars to avoid conflicts
+          echo "Deploying to Cloud Run with fresh environment variables..."
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
+            --platform managed \
+            --region ${{ env.REGION }} \
+            --allow-unauthenticated \
+            --memory=2Gi \
+            --cpu=2 \
+            --timeout=300 \
+            --min-instances=1 \
+            --max-instances=10 \
+            --clear-env-vars \
+            --set-env-vars="NODE_ENV=production,API_KEY_ENV=${{ secrets.API_KEY }},OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}"
       
       - name: Get Service URL
         run: |
