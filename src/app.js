@@ -43,9 +43,10 @@ const io = new Server(server, {
   }
 });
 
-// Initialize connections
-connectDatabase();
-connectRedis();
+// Initialize connections - temporarily disabled to ensure server starts
+// connectDatabase();
+// connectRedis();
+console.log('Database and Redis connections temporarily disabled for deployment');
 
 // Security middleware
 app.use(helmet({
