@@ -7,7 +7,7 @@ class AirtableOAuthService {
     constructor() {
         this.clientId = process.env.AIRTABLE_CLIENT_ID;
         this.clientSecret = process.env.AIRTABLE_CLIENT_SECRET;
-        this.redirectUri = `${process.env.BACKEND_URL || 'https://voiceassistant-floe-production.up.railway.app'}/api/oauth/airtable/callback`;
+        this.redirectUri = `${process.env.BACKEND_URL || 'https://voice-assistant-backend-899362685715.us-central1.run.app'}/api/oauth/airtable/callback`;
         
         this.scopes = [
             'data.records:read',
@@ -253,18 +253,28 @@ class AirtableOAuthService {
     // Public OAuth methods (no existing user required)
     async createAuthUrl(state, returnUrl = null) {
         try {
-            const authUrl = `https://airtable.com/oauth2/v1/authorize?` +
-                `client_id=${process.env.AIRTABLE_CLIENT_ID}&` +
-                `redirect_uri=${process.env.BACKEND_URL}/api/oauth/airtable/callback&` +
-                `response_type=code&` +
-                `state=${state}&` +
-                `scope=data.records:read data.records:write`;
+            // Generate PKCE parameters
+            const codeVerifier = crypto.randomBytes(32).toString('base64url');
+            const codeChallenge = crypto.createHash('sha256')
+                .update(codeVerifier)
+                .digest('base64url');
+            
+            // Build authorization URL with PKCE
+            const authUrl = new URL('https://airtable.com/oauth2/v1/authorize');
+            authUrl.searchParams.append('client_id', process.env.AIRTABLE_CLIENT_ID || '2588ca29-039d-4704-bd8c-60fcaa7ead3c');
+            authUrl.searchParams.append('redirect_uri', `${process.env.BACKEND_URL || 'https://voice-assistant-backend-899362685715.us-central1.run.app'}/api/oauth/airtable/callback`);
+            authUrl.searchParams.append('response_type', 'code');
+            authUrl.searchParams.append('scope', 'data.records:read data.records:write schema.bases:read');
+            authUrl.searchParams.append('state', state);
+            authUrl.searchParams.append('code_challenge', codeChallenge);
+            authUrl.searchParams.append('code_challenge_method', 'S256');
             
             logger.info(`Airtable OAuth URL created for state: ${state}`);
             
             return {
-                authUrl,
-                state
+                authUrl: authUrl.toString(),
+                state,
+                codeVerifier // Return code verifier so it can be stored
             };
             
         } catch (error) {
@@ -275,14 +285,21 @@ class AirtableOAuthService {
     
     async handlePublicCallback(code, state, sessionData) {
         try {
-            // Exchange code for tokens
-            const tokenResponse = await axios.post('https://airtable.com/oauth2/v1/token', {
+            // Exchange code for tokens with PKCE
+            const tokenData = {
                 grant_type: 'authorization_code',
-                client_id: process.env.AIRTABLE_CLIENT_ID,
+                client_id: process.env.AIRTABLE_CLIENT_ID || '2588ca29-039d-4704-bd8c-60fcaa7ead3c',
                 client_secret: process.env.AIRTABLE_CLIENT_SECRET,
                 code: code,
-                redirect_uri: `${process.env.BACKEND_URL}/api/oauth/airtable/callback`
-            });
+                redirect_uri: `${process.env.BACKEND_URL || 'https://voice-assistant-backend-899362685715.us-central1.run.app'}/api/oauth/airtable/callback`
+            };
+            
+            // Add code_verifier if available (for PKCE)
+            if (sessionData && sessionData.codeVerifier) {
+                tokenData.code_verifier = sessionData.codeVerifier;
+            }
+            
+            const tokenResponse = await axios.post('https://airtable.com/oauth2/v1/token', tokenData);
             
             const tokens = tokenResponse.data;
             

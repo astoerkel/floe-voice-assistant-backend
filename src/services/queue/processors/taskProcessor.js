@@ -1,23 +1,7 @@
 const logger = require('../../../utils/logger');
 const { JOB_TYPES } = require('../config');
-// const airtableService = require('../../integrations/airtable/tasks'); // Temporarily disabled
+const airtableService = require('../../integrations/airtable/tasks');
 const { prisma } = require('../../../config/database');
-
-// Mock Airtable service until API key is available
-const airtableService = {
-  createTask: async (task) => {
-    logger.warn('Airtable service disabled - returning mock response');
-    return { id: `mock-${Date.now()}`, ...task };
-  },
-  updateTask: async (taskId, updates) => {
-    logger.warn('Airtable service disabled - returning mock response');
-    return { id: taskId, ...updates };
-  },
-  listTasks: async () => {
-    logger.warn('Airtable service disabled - returning empty list');
-    return [];
-  }
-};
 
 const processJob = async (job) => {
   const { name, data } = job;

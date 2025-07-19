@@ -1,0 +1,64 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Build output
+dist/
+build/
+
+# Logs
+logs/
+*.log
+
+# Google Cloud
+gcp-key.json
+service-account.json
+voice-assistant-ios-key.json
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Development files
+*.backup
+*.test.js
+test-*.js
+*-test.js
+*-diagnostic.js
+*-minimal.js
+*-workaround.js
+*-fixed.js
+*-env-test.js
+
+# Deployment scripts (keep only essential ones)
+deploy-*.sh
+!deploy-railway.js
+add-*.sh
+fix-*.sh
+force-*.sh
+setup-*.sh
+update-*.sh
+verify-*.sh
+test-*.sh
+
+# Build artifacts
+google-cloud-sdk/
+google-cloud-cli-*.tar.gz
+
+# Documentation drafts
+*-fix.md
+*-STATUS.md
+
+# Temporary files
+*.tmp
+*.temp
+fixed-*.log

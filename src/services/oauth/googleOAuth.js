@@ -8,7 +8,7 @@ class GoogleOAuthService {
         this.oauth2Client = new google.auth.OAuth2(
             process.env.GOOGLE_CLIENT_ID,
             process.env.GOOGLE_CLIENT_SECRET,
-            `${process.env.BACKEND_URL || 'https://voiceassistant-floe-production.up.railway.app'}/api/oauth/google/callback`
+            `${process.env.BACKEND_URL || 'https://voice-assistant-backend-899362685715.us-central1.run.app'}/api/oauth/google/callback`
         );
         
         this.scopes = [

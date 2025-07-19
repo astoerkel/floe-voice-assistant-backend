@@ -23,6 +23,7 @@ const integrationsRoutes = require('./routes/integrations');
 const syncRoutes = require('./routes/sync');
 const queueRoutes = require('./routes/queue');
 const oauthRoutes = require('./routes/oauth');
+const diagnosticsRoutes = require('./routes/diagnostics');
 
 // Import WebSocket handlers
 const initializeWebSocket = require('./websocket');
@@ -103,6 +104,7 @@ app.use('/api/integrations', authenticateApiKey, integrationsRoutes);
 app.use('/api/sync', authenticateApiKey, syncRoutes);
 app.use('/api/queue', authenticateApiKey, queueRoutes);
 app.use('/api/oauth', oauthRoutes); // OAuth routes handle their own authentication
+app.use('/api/diagnostics', diagnosticsRoutes); // Diagnostics routes (no auth for debugging)
 
 // Static file serving for audio files
 app.use('/audio', express.static(process.env.RAILWAY_VOLUME_MOUNT_PATH || '/app/data/audio'));

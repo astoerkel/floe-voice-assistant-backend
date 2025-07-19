@@ -67,8 +67,24 @@ class OAuthController {
             }
             
         } catch (error) {
-            logger.error('Google OAuth callback error:', error);
-            res.redirect(`${process.env.FRONTEND_URL}/settings/integrations?error=oauth_failed`);
+            logger.error('Google OAuth callback error:', {
+                message: error.message,
+                stack: error.stack,
+                state: req.query.state,
+                hasCode: !!req.query.code
+            });
+            
+            // Determine specific error type
+            let errorType = 'oauth_failed';
+            if (error.message.includes('session')) {
+                errorType = 'session_expired';
+            } else if (error.message.includes('state')) {
+                errorType = 'invalid_state';
+            }
+            
+            // Use iOS deep link for redirect
+            const redirectUrl = process.env.FRONTEND_URL || 'voiceassistant://oauth';
+            res.redirect(`${redirectUrl}?error=${errorType}&details=${encodeURIComponent(error.message)}`);
         }
     }
     
@@ -130,7 +146,7 @@ class OAuthController {
             
         } catch (error) {
             logger.error('Airtable OAuth callback error:', error);
-            res.redirect(`${process.env.FRONTEND_URL}/settings/integrations?error=oauth_failed`);
+            res.redirect(`${process.env.FRONTEND_URL || 'voiceassistant://oauth'}?error=oauth_failed`);
         }
     }
     
@@ -191,20 +207,21 @@ class OAuthController {
             // Generate secure state token
             const state = crypto.randomBytes(32).toString('hex');
             
-            // Store OAuth session in Redis (5 minutes expiry)
+            // Create Airtable OAuth URL (this now returns codeVerifier for PKCE)
+            const result = await this.airtableOAuth.createAuthUrl(state, returnUrl);
+            
+            // Store OAuth session in Redis (5 minutes expiry) with codeVerifier
             const sessionData = {
                 deviceId,
                 returnUrl,
                 type: 'airtable',
+                codeVerifier: result.codeVerifier, // Store the PKCE code verifier
                 createdAt: new Date().toISOString()
             };
             
             // Store in Redis with expiration
             const { redis: redisClient } = require('../config/redis');
             await redisClient.setex(`oauth_session:${state}`, 300, JSON.stringify(sessionData));
-            
-            // Create Airtable OAuth URL
-            const result = await this.airtableOAuth.createAuthUrl(state, returnUrl);
             
             res.json({
                 success: true,

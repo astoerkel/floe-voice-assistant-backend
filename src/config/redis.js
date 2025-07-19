@@ -29,10 +29,11 @@ const mockRedisClient = {
 function getRedisConfiguration() {
   // Log all Redis-related environment variables for debugging
   logger.info('Redis environment variables:', {
-    REDIS_URL: process.env.REDIS_URL ? 'set' : 'not set',
-    REDIS_HOST: process.env.REDIS_HOST || 'not set',
-    REDIS_PORT: process.env.REDIS_PORT || 'not set',
-    NODE_ENV: process.env.NODE_ENV
+    REDIS_URL: process.env.REDIS_URL || 'NOT SET',
+    REDIS_HOST: process.env.REDIS_HOST || 'NOT SET',
+    REDIS_PORT: process.env.REDIS_PORT || 'NOT SET',
+    NODE_ENV: process.env.NODE_ENV || 'NOT SET',
+    BACKEND_URL: process.env.BACKEND_URL || 'NOT SET'
   });
 
   // Priority 1: Use REDIS_URL if available
@@ -46,6 +47,7 @@ function getRedisConfiguration() {
 
   // Priority 2: In production, construct URL from host/port
   if (process.env.NODE_ENV === 'production') {
+    // Google Cloud Memorystore Redis instance
     const host = process.env.REDIS_HOST || '10.244.122.235';
     const port = process.env.REDIS_PORT || '6379';
     const url = `redis://${host}:${port}`;
