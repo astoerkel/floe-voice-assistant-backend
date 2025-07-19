@@ -9,17 +9,16 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-FROM base AS deps
-RUN npm ci --only=production
-
-# Build stage
+# Build stage - install all dependencies and generate Prisma client
 FROM base AS build
 COPY package*.json ./
 RUN npm ci
 COPY . .
-# If you have a build step, add it here
-# RUN npm run build
+RUN npx prisma generate
+
+# Production dependencies stage
+FROM base AS deps
+RUN npm ci --only=production
 
 # Production stage
 FROM node:18-alpine AS production
@@ -32,6 +31,9 @@ WORKDIR /app
 
 # Copy production dependencies
 COPY --from=deps --chown=nodejs:nodejs /app/node_modules ./node_modules
+
+# Copy generated Prisma client from build stage
+COPY --from=build --chown=nodejs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
 
 # Copy application code
 COPY --chown=nodejs:nodejs package*.json ./
