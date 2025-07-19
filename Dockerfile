@@ -40,6 +40,7 @@ COPY --from=build --chown=nodejs:nodejs /app/node_modules/.prisma ./node_modules
 COPY --chown=nodejs:nodejs package*.json ./
 COPY --chown=nodejs:nodejs src ./src
 COPY --chown=nodejs:nodejs start.js ./
+COPY --chown=nodejs:nodejs minimal-server.js ./
 
 # Set production environment
 ENV NODE_ENV=production
@@ -56,4 +57,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
   CMD node -e "require('http').get('http://localhost:8080/health', (res) => process.exit(res.statusCode === 200 ? 0 : 1))"
 
 # Start the application
-CMD ["node", "start.js"]
+CMD ["node", "minimal-server.js"]
