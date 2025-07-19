@@ -3,7 +3,7 @@ const logger = require('../utils/logger');
 // Simple API key authentication middleware
 const authenticateApiKey = (req, res, next) => {
   const apiKey = req.headers['x-api-key'] || req.headers['authorization']?.replace('Bearer ', '');
-  const validApiKey = process.env.API_KEY || 'voice-assistant-api-key-2024';
+  const validApiKey = process.env.API_KEY || process.env.API_KEY_ENV || 'voice-assistant-api-key-2024';
   
   if (!apiKey) {
     logger.warn('API request without API key', { 
