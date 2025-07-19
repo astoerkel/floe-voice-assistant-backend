@@ -1,4 +1,13 @@
+// Load environment variables
 require('dotenv').config();
+
+// Startup diagnostics
+console.log('=== SERVER STARTUP ===');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('PORT:', process.env.PORT || 3000);
+console.log('API_KEY_ENV:', process.env.API_KEY_ENV ? 'Set' : 'Not set');
+console.log('OPENAI_API_KEY:', process.env.OPENAI_API_KEY ? 'Set' : 'Not set');
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -118,11 +127,24 @@ app.use('/api/queue', authenticateApiKey, queueRoutes);
 app.use('/api/oauth', oauthRoutes); // OAuth routes handle their own authentication
 app.use('/api/diagnostics', diagnosticsRoutes); // Diagnostics routes (no auth for debugging)
 
-// Static file serving for audio files
-app.use('/audio', express.static(process.env.RAILWAY_VOLUME_MOUNT_PATH || '/app/data/audio'));
+// Static file serving for audio files (only if directory exists)
+const audioPath = process.env.RAILWAY_VOLUME_MOUNT_PATH || '/app/data/audio';
+const fs = require('fs');
+if (fs.existsSync(audioPath)) {
+  app.use('/audio', express.static(audioPath));
+  logger.info(`Audio static files served from: ${audioPath}`);
+} else {
+  logger.warn(`Audio directory not found: ${audioPath}`);
+}
 
-// Initialize WebSocket
-initializeWebSocket(io);
+// Initialize WebSocket (with error handling)
+try {
+  initializeWebSocket(io);
+  logger.info('WebSocket initialized successfully');
+} catch (error) {
+  logger.error('WebSocket initialization failed:', error);
+  // Continue without WebSocket - REST API will still work
+}
 
 // Error handling middleware (should be last)
 app.use(errorHandler);

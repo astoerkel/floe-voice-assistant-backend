@@ -41,6 +41,8 @@ COPY --chown=nodejs:nodejs package*.json ./
 COPY --chown=nodejs:nodejs src ./src
 COPY --chown=nodejs:nodejs start.js ./
 COPY --chown=nodejs:nodejs minimal-server.js ./
+COPY --chown=nodejs:nodejs start-diagnostic.js ./
+COPY --chown=nodejs:nodejs start-production.js ./
 
 # Set production environment
 ENV NODE_ENV=production
@@ -57,4 +59,4 @@ USER nodejs
 # HEALTHCHECK removed - Cloud Run will check the port directly
 
 # Start the application
-CMD ["node", "src/app.js"]
+CMD ["node", "start-production.js"]

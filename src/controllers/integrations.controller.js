@@ -1,6 +1,6 @@
 const GoogleCalendarService = require('../services/integrations/google/calendar');
 const GmailService = require('../services/integrations/google/gmail');
-const AirtableService = require('../services/integrations/airtable/tasks');
+const airtableService = require('../services/integrations/airtable/tasks'); // This is already an instance
 const { prisma } = require('../config/database');
 const logger = require('../utils/logger');
 
@@ -8,7 +8,7 @@ class IntegrationsController {
     constructor() {
         this.calendarService = new GoogleCalendarService();
         this.gmailService = new GmailService();
-        this.airtableService = new AirtableService();
+        this.airtableService = airtableService; // Use the exported instance directly
     }
     
     // Calendar endpoints
