@@ -89,9 +89,21 @@ jobs:
       
       - name: Deploy to Cloud Run
         run: |
-          # Use deployment script for proper handling
-          chmod +x ./scripts/deploy-cloud-run.sh
-          ./scripts/deploy-cloud-run.sh "${{ github.sha }}" "${{ secrets.API_KEY }}" "${{ secrets.OPENAI_API_KEY }}"
+          # Deploy with environment variables as a fresh deployment
+          echo "Deploying to Cloud Run..."
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
+            --platform managed \
+            --region ${{ env.REGION }} \
+            --allow-unauthenticated \
+            --memory=2Gi \
+            --cpu=2 \
+            --timeout=300 \
+            --min-instances=1 \
+            --max-instances=10 \
+            --set-env-vars="NODE_ENV=production" \
+            --set-env-vars="API_KEY_ENV=${{ secrets.API_KEY }}" \
+            --set-env-vars="OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}"
       
       - name: Get Service URL
         run: |
