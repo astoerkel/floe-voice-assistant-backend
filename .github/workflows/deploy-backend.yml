@@ -102,7 +102,7 @@ jobs:
               --timeout=300 \
               --min-instances=1 \
               --max-instances=10 \
-              --update-env-vars="NODE_ENV=production,API_KEY_ENV=${{ secrets.API_KEY }}"
+              --update-env-vars="NODE_ENV=production,API_KEY_ENV=${{ secrets.API_KEY }},OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}"
           else
             echo "Service does not exist, creating with initial env vars..."
             gcloud run deploy ${{ env.SERVICE_NAME }} \
@@ -115,7 +115,7 @@ jobs:
               --timeout=300 \
               --min-instances=1 \
               --max-instances=10 \
-              --set-env-vars="NODE_ENV=production,API_KEY_ENV=${{ secrets.API_KEY }}"
+              --set-env-vars="NODE_ENV=production,API_KEY_ENV=${{ secrets.API_KEY }},OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}"
           fi
       
       - name: Get Service URL
