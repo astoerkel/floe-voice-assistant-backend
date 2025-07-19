@@ -12,13 +12,14 @@ COPY package*.json ./
 # Build stage - install all dependencies and generate Prisma client
 FROM base AS build
 COPY package*.json ./
-RUN npm ci
 COPY . .
+RUN npm ci
 RUN npx prisma generate
 
-# Production dependencies stage
+# Production dependencies stage  
 FROM base AS deps
-RUN npm ci --only=production
+COPY package*.json ./
+RUN npm ci --only=production --ignore-scripts
 
 # Production stage
 FROM node:18-alpine AS production
