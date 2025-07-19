@@ -1,0 +1,31 @@
+steps:
+  # Build the container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/voice-assistant/backend:latest', '.']
+  
+  # Push the container image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/voice-assistant/backend:latest']
+  
+  # Deploy container image to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'voice-assistant-backend'
+      - '--image'
+      - 'us-central1-docker.pkg.dev/$PROJECT_ID/voice-assistant/backend:latest'
+      - '--region'
+      - 'us-central1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--service-account'
+      - 'voice-assistant-run@floe-voice-assistant.iam.gserviceaccount.com'
+
+images:
+  - 'us-central1-docker.pkg.dev/$PROJECT_ID/voice-assistant/backend:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY

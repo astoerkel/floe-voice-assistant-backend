@@ -1,18 +1,18 @@
-# OAuth Integration Deployment - Railway
+# OAuth Integration Deployment - Google Cloud Platform
 
 ## Quick Start
 
-Based on your Google Cloud Console setup, here's how to deploy the OAuth integration to Railway:
+Based on your Google Cloud Console setup, here's how to deploy the OAuth integration to Google Cloud Platform:
 
-### 1. Set Railway Environment Variables
+### 1. Set Google Cloud Environment Variables
 
 ```bash
 # Copy these values from your Google Cloud Console
 GOOGLE_CLIENT_ID=899362685715-cspn... # Your web application client ID
 GOOGLE_CLIENT_SECRET=your_client_secret_here
 
-# Railway URLs
-BACKEND_URL=https://voiceassistant-floe-production.up.railway.app
+# Google Cloud URLs
+BACKEND_URL=https://voice-assistant-backend-899362685715.us-central1.run.app
 FRONTEND_URL=com.amitstoerkel.VoiceAssistant://oauth
 
 # Generate strong JWT secrets (32+ characters)
@@ -39,9 +39,9 @@ npm run deploy-migrations
 ### 3. Test OAuth Flow
 
 Your OAuth endpoints are ready at:
-- **Google OAuth Init**: `https://voiceassistant-floe-production.up.railway.app/api/oauth/google/init`
-- **Google OAuth Callback**: `https://voiceassistant-floe-production.up.railway.app/api/oauth/google/callback`
-- **Integrations List**: `https://voiceassistant-floe-production.up.railway.app/api/oauth/integrations`
+- **Google OAuth Init**: `https://voice-assistant-backend-899362685715.us-central1.run.app/api/oauth/public/google/init`
+- **Google OAuth Callback**: `https://voice-assistant-backend-899362685715.us-central1.run.app/api/oauth/google/callback`
+- **Integrations List**: `https://voice-assistant-backend-899362685715.us-central1.run.app/api/integrations/status`
 
 ## iOS App Integration
 
@@ -70,7 +70,7 @@ Update your APIClient base URL to point to Railway:
 class APIClient {
     static let shared = APIClient()
     
-    private let baseURL = "https://voiceassistant-floe-production.up.railway.app"
+    private let baseURL = "https://voice-assistant-backend-899362685715.us-central1.run.app"
     
     // ... rest of implementation
 }
@@ -92,8 +92,8 @@ Your setup should match these settings:
 ### Web Application Credentials
 - **Client ID**: `899362685715-cspn...` (starts with your project number)
 - **Client Secret**: From Google Cloud Console
-- **Authorized origins**: `https://voiceassistant-floe-production.up.railway.app`
-- **Redirect URIs**: `https://voiceassistant-floe-production.up.railway.app/api/oauth/google/callback`
+- **Authorized origins**: `https://voice-assistant-backend-899362685715.us-central1.run.app`
+- **Redirect URIs**: `https://voice-assistant-backend-899362685715.us-central1.run.app/api/oauth/google/callback`
 
 ### iOS Application Credentials
 - **Client ID**: `899362685715-eha0...` (different from web client ID)
@@ -174,10 +174,10 @@ model OAuthState {
 railway logs --follow
 
 # Check health
-curl https://voiceassistant-floe-production.up.railway.app/health
+curl https://voice-assistant-backend-899362685715.us-central1.run.app/health
 
 # Test OAuth endpoint
-curl https://voiceassistant-floe-production.up.railway.app/api/oauth/google/init
+curl -X POST https://voice-assistant-backend-899362685715.us-central1.run.app/api/oauth/public/google/init -H "Content-Type: application/json" -d '{"deviceId":"test"}'
 ```
 
 ### Monitor OAuth Events
@@ -197,7 +197,7 @@ railway logs --filter="error"
 ### Common Issues
 
 1. **OAuth Redirect URI Mismatch**
-   - Ensure redirect URI exactly matches: `https://voiceassistant-floe-production.up.railway.app/api/oauth/google/callback`
+   - Ensure redirect URI exactly matches: `https://voice-assistant-backend-899362685715.us-central1.run.app/api/oauth/google/callback`
 
 2. **Missing Environment Variables**
    - Run `npm run validate-deployment` to check configuration
