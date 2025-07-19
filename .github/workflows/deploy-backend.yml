@@ -70,9 +70,9 @@ jobs:
           version: 'latest'
       
       - name: Authenticate to Google Cloud
-        run: |
-          echo "Using default application credentials for deployment"
-          gcloud auth application-default login --no-launch-browser || echo "Auth may be required"
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
       
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
