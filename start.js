@@ -21,5 +21,10 @@ try {
   require('./src/app.js');
 } catch (error) {
   console.error('Failed to start application:', error);
-  process.exit(1);
+  console.error('Stack trace:', error.stack);
+  // Don't exit immediately - let Cloud Run see the error
+  setTimeout(() => {
+    console.error('Exiting due to startup failure');
+    process.exit(1);
+  }, 5000);
 }

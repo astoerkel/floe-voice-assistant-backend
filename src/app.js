@@ -140,9 +140,10 @@ process.on('SIGINT', () => {
   });
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   logger.info(`Voice Assistant Backend running on port ${PORT}`);
   logger.info(`Environment: ${process.env.NODE_ENV}`);
+  console.log(`Server successfully listening on 0.0.0.0:${PORT}`);
 });
 
 module.exports = app;
