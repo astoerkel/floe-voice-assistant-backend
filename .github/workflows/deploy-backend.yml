@@ -99,8 +99,7 @@ jobs:
             --timeout=300 \
             --min-instances=1 \
             --max-instances=10 \
-            --set-env-vars="NODE_ENV=production,PORT=8080" \
-            --set-env-vars="API_KEY=${{ secrets.API_KEY }}" \
+            --set-env-vars="NODE_ENV=production,PORT=8080,API_KEY=${{ secrets.API_KEY }}" \
             --set-secrets="GOOGLE_CLIENT_ID=google-oauth-client-id:latest,GOOGLE_CLIENT_SECRET=google-oauth-client-secret:latest,AIRTABLE_CLIENT_ID=airtable-client-id:latest,AIRTABLE_CLIENT_SECRET=airtable-client-secret:latest,JWT_SECRET=jwt-secret:latest,OPENAI_API_KEY=openai-api-key:latest"
       
       - name: Get Service URL
