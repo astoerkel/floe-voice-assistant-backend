@@ -87,10 +87,28 @@ jobs:
           docker push gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
           docker push gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:latest
       
+      - name: Clear Cloud Run Environment
+        run: |
+          # Clear all environment variables and secrets to avoid conflicts
+          echo "Clearing existing environment variables..."
+          gcloud run services update ${{ env.SERVICE_NAME }} \
+            --region ${{ env.REGION }} \
+            --clear-env-vars \
+            --quiet || echo "No env vars to clear"
+          
+          echo "Clearing existing secrets..."
+          gcloud run services update ${{ env.SERVICE_NAME }} \
+            --region ${{ env.REGION }} \
+            --clear-secrets \
+            --quiet || echo "No secrets to clear"
+          
+          # Wait for changes to propagate
+          sleep 5
+      
       - name: Deploy to Cloud Run
         run: |
-          # Deploy with environment variables as a fresh deployment
-          echo "Deploying to Cloud Run..."
+          # Deploy with fresh environment variables
+          echo "Deploying to Cloud Run with fresh environment..."
           gcloud run deploy ${{ env.SERVICE_NAME }} \
             --image gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
             --platform managed \
@@ -101,9 +119,7 @@ jobs:
             --timeout=300 \
             --min-instances=1 \
             --max-instances=10 \
-            --set-env-vars="NODE_ENV=production" \
-            --set-env-vars="API_KEY_ENV=${{ secrets.API_KEY }}" \
-            --set-env-vars="OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}"
+            --set-env-vars="NODE_ENV=production,API_KEY_ENV=${{ secrets.API_KEY }},OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}"
       
       - name: Get Service URL
         run: |
@@ -113,5 +129,30 @@ jobs:
       
       - name: Smoke Test
         run: |
-          sleep 10 # Wait for service to be ready
-          curl -f "${{ env.SERVICE_URL }}/health" || exit 1
+          echo "Waiting for service to be ready..."
+          sleep 30 # Wait for service to fully start
+          
+          echo "Testing health endpoint..."
+          curl -f -s "${{ env.SERVICE_URL }}/health" | jq . || exit 1
+          
+          echo "Testing API authentication..."
+          response=$(curl -s -w "\n%{http_code}" -X POST "${{ env.SERVICE_URL }}/api/voice/process-text" \
+            -H "Content-Type: application/json" \
+            -H "x-api-key: ${{ secrets.API_KEY }}" \
+            -d '{"text": "Hello", "sessionId": "test-ci", "platform": "ios"}')
+          
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | head -n-1)
+          
+          echo "Response: $body"
+          echo "HTTP Code: $http_code"
+          
+          if [ "$http_code" -eq 401 ]; then
+            echo "❌ Authentication failed - check API_KEY secret"
+            exit 1
+          elif [ "$http_code" -eq 200 ]; then
+            echo "✅ API is working correctly"
+          else
+            echo "❌ Unexpected response code: $http_code"
+            exit 1
+          fi
