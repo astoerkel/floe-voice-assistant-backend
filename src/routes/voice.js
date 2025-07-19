@@ -23,13 +23,10 @@ const upload = multer({
   }
 });
 
-// Development-only endpoint with authentication (still uses development tokens)
-router.post('/dev/process-audio', upload.single('audio'), authenticateToken, processVoiceAudioValidation, controller.processVoiceAudio);
+// Development-only endpoint
+router.post('/dev/process-audio', upload.single('audio'), processVoiceAudioValidation, controller.processVoiceAudio);
 
-// All other voice routes require authentication
-router.use(authenticateToken);
-
-// Voice processing routes
+// Voice processing routes (authentication handled by app.js)
 router.post('/process-text', processTextValidation, controller.processText);
 router.post('/process', processVoiceValidation, controller.processVoiceCommand);
 router.post('/process-audio', upload.single('audio'), processVoiceAudioValidation, controller.processVoiceAudio);

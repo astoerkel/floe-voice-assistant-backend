@@ -119,7 +119,7 @@ jobs:
             --timeout=300 \
             --min-instances=1 \
             --max-instances=10 \
-            --set-env-vars="NODE_ENV=production,API_KEY_ENV=${{ secrets.API_KEY }},OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}"
+            --set-env-vars="NODE_ENV=production,API_KEY_ENV=${{ secrets.API_KEY }},OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }},GOOGLE_CLOUD_PROJECT_ID=floe-voice-assistant"
       
       - name: Get Service URL
         run: |
