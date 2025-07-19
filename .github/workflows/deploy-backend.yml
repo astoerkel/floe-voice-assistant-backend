@@ -99,7 +99,7 @@ jobs:
             --timeout=300 \
             --min-instances=1 \
             --max-instances=10 \
-            --set-env-vars="NODE_ENV=production,API_KEY_ENV=${{ secrets.API_KEY }},OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }},ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}"
+            --update-env-vars="NODE_ENV=production,API_KEY_ENV=${{ secrets.API_KEY }}"
       
       - name: Get Service URL
         run: |
