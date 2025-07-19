@@ -41,7 +41,6 @@ COPY --chown=nodejs:nodejs package*.json ./
 COPY --chown=nodejs:nodejs src ./src
 COPY --chown=nodejs:nodejs start.js ./
 COPY --chown=nodejs:nodejs minimal-server.js ./
-COPY --chown=nodejs:nodejs start-diagnostic.js ./
 COPY --chown=nodejs:nodejs start-production.js ./
 
 # Set production environment
