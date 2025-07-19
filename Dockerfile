@@ -53,8 +53,8 @@ EXPOSE 8080
 USER nodejs
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:8080/health', (res) => process.exit(res.statusCode === 200 ? 0 : 1))"
+# Remove healthcheck - let Cloud Run handle it
+# HEALTHCHECK removed - Cloud Run will check the port directly
 
 # Start the application
 CMD ["node", "minimal-server.js"]
