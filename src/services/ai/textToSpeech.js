@@ -5,10 +5,17 @@ const logger = require('../../utils/logger');
 
 class TextToSpeechService {
   constructor() {
-    this.client = new textToSpeech.TextToSpeechClient({
-      keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
-      projectId: process.env.GOOGLE_CLOUD_PROJECT_ID
-    });
+    // In Cloud Run, use default credentials instead of keyFilename
+    const clientConfig = {
+      projectId: process.env.GOOGLE_CLOUD_PROJECT_ID || 'floe-voice-assistant'
+    };
+    
+    // Only add keyFilename if it exists and we're not in Cloud Run
+    if (process.env.GOOGLE_APPLICATION_CREDENTIALS && !process.env.K_SERVICE) {
+      clientConfig.keyFilename = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    }
+    
+    this.client = new textToSpeech.TextToSpeechClient(clientConfig);
     
     // Default voice configurations
     this.defaultVoiceConfig = {
