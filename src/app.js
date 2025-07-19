@@ -43,10 +43,21 @@ const io = new Server(server, {
   }
 });
 
-// Initialize connections - temporarily disabled to ensure server starts
-// connectDatabase();
-// connectRedis();
-console.log('Database and Redis connections temporarily disabled for deployment');
+// Initialize connections asynchronously to not block server startup
+Promise.all([
+  connectDatabase().catch(err => {
+    logger.error('Database connection failed:', err);
+    console.log('Continuing without database connection');
+  }),
+  connectRedis().catch(err => {
+    logger.error('Redis connection failed:', err);
+    console.log('Continuing without Redis connection');
+  })
+]).then(() => {
+  logger.info('All connections initialized');
+}).catch(err => {
+  logger.error('Connection initialization error:', err);
+});
 
 // Security middleware
 app.use(helmet({

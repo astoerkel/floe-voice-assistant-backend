@@ -57,4 +57,4 @@ USER nodejs
 # HEALTHCHECK removed - Cloud Run will check the port directly
 
 # Start the application
-CMD ["node", "minimal-server.js"]
+CMD ["node", "src/app.js"]
