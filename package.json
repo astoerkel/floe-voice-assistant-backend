@@ -20,7 +20,8 @@
     "deploy-migrations": "node scripts/deploy-migrations.js",
     "deploy-oauth": "node scripts/deploy-oauth.js",
     "deploy-railway": "node scripts/deploy-railway.js",
-    "oauth-setup": "npm run validate-deployment && npm run deploy-migrations"
+    "oauth-setup": "npm run validate-deployment && npm run deploy-migrations",
+    "migrate-coordinator": "node scripts/create-coordinator-migration.js"
   },
   "keywords": [
     "voice-assistant",

@@ -5,17 +5,37 @@ const logger = require('../../utils/logger');
 
 class TextToSpeechService {
   constructor() {
-    // In Cloud Run, use default credentials instead of keyFilename
-    const clientConfig = {
-      projectId: process.env.GOOGLE_CLOUD_PROJECT_ID || 'floe-voice-assistant'
-    };
-    
-    // Only add keyFilename if it exists and we're not in Cloud Run
-    if (process.env.GOOGLE_APPLICATION_CREDENTIALS && !process.env.K_SERVICE) {
-      clientConfig.keyFilename = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    // Check if we should use API key method
+    if (process.env.GOOGLE_TTS_API_KEY) {
+      this.apiKey = process.env.GOOGLE_TTS_API_KEY;
+      this.useApiKey = true;
+      logger.info('Using Google TTS API Key authentication');
+    } else {
+      // Use service account method
+      const clientConfig = {
+        projectId: process.env.GOOGLE_CLOUD_PROJECT_ID || 'southern-engine-461211-j3'
+      };
+      
+      // Check for credentials JSON first
+      if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
+        try {
+          const credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
+          clientConfig.credentials = credentials;
+          logger.info('Using Google TTS service account from JSON');
+        } catch (error) {
+          logger.error('Failed to parse GOOGLE_APPLICATION_CREDENTIALS_JSON:', error);
+          throw new Error('Invalid GOOGLE_APPLICATION_CREDENTIALS_JSON format');
+        }
+      } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS && fs.existsSync(process.env.GOOGLE_APPLICATION_CREDENTIALS)) {
+        clientConfig.keyFilename = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+        logger.info('Using Google TTS service account from file');
+      } else {
+        throw new Error('No valid Google Cloud credentials found. Set GOOGLE_TTS_API_KEY, GOOGLE_APPLICATION_CREDENTIALS_JSON, or GOOGLE_APPLICATION_CREDENTIALS');
+      }
+      
+      this.client = new textToSpeech.TextToSpeechClient(clientConfig);
+      this.useApiKey = false;
     }
-    
-    this.client = new textToSpeech.TextToSpeechClient(clientConfig);
     
     // Default voice configurations
     this.defaultVoiceConfig = {
@@ -39,22 +59,28 @@ class TextToSpeechService {
       // Merge options with defaults
       const voiceConfig = { ...this.defaultVoiceConfig, ...options.voice };
       const audioConfig = { ...this.defaultAudioConfig, ...options.audio };
-      
-      // Prepare the request
-      const request = {
-        input: { text },
-        voice: voiceConfig,
-        audioConfig
-      };
 
       logger.info('Starting text-to-speech synthesis', {
         textLength: text.length,
         voiceConfig,
-        audioConfig
+        audioConfig,
+        method: this.useApiKey ? 'API Key' : 'Service Account'
       });
 
-      // Perform the text-to-speech request
-      const [response] = await this.client.synthesizeSpeech(request);
+      let response;
+      if (this.useApiKey) {
+        // Use REST API with API key
+        response = await this.synthesizeWithApiKey(text, voiceConfig, audioConfig);
+      } else {
+        // Use Google Cloud client library
+        const request = {
+          input: { text },
+          voice: voiceConfig,
+          audioConfig
+        };
+        const [clientResponse] = await this.client.synthesizeSpeech(request);
+        response = clientResponse;
+      }
       
       const processingTime = Date.now() - startTime;
       
@@ -358,6 +384,35 @@ class TextToSpeechService {
 
     const languageVoices = voiceMap[language] || voiceMap['en-US'];
     return languageVoices[gender.toLowerCase()] || languageVoices.female;
+  }
+
+  async synthesizeWithApiKey(text, voiceConfig, audioConfig) {
+    const url = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${this.apiKey}`;
+    
+    const requestBody = {
+      input: { text },
+      voice: voiceConfig,
+      audioConfig
+    };
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(`Google TTS API error: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`);
+    }
+
+    const data = await response.json();
+    
+    return {
+      audioContent: Buffer.from(data.audioContent, 'base64')
+    };
   }
 }
 

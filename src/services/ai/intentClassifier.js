@@ -4,10 +4,17 @@ const logger = require('../../utils/logger');
 class IntentClassifier {
   constructor() {
     this.llm = new ChatOpenAI({
-      openAIApiKey: process.env.OPENAI_API_KEY,
+      openAIApiKey: process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY,
       modelName: 'gpt-3.5-turbo',
       temperature: 0,
-      maxTokens: 50
+      maxTokens: 50,
+      configuration: {
+        baseURL: process.env.OPENROUTER_API_KEY ? 'https://openrouter.ai/api/v1' : undefined,
+        defaultHeaders: process.env.OPENROUTER_API_KEY ? {
+          'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://floe.cognetica.de',
+          'X-Title': process.env.OPENROUTER_SITE_NAME || 'Voice Assistant'
+        } : {}
+      }
     });
 
     this.intentPatterns = {

@@ -42,17 +42,39 @@ class OAuthController {
                 return res.redirect(`${process.env.FRONTEND_URL || 'voiceassistant://oauth'}?error=missing_parameters`);
             }
             
-            // Check if this is a public OAuth flow
+            // Check if this is a public OAuth flow (Redis first, then database fallback)
             const { redis: redisClient } = require('../config/redis');
-            const sessionData = await redisClient.get(`oauth_session:${state}`);
+            let sessionDataStr = await redisClient.get(`oauth_session:${state}`);
+            let isFromDatabase = false;
             
-            if (sessionData) {
+            // If not found in Redis, check database
+            if (!sessionDataStr) {
+                const dbSession = await prisma.oAuthState.findUnique({
+                    where: { state }
+                });
+                
+                if (dbSession && dbSession.metadata) {
+                    sessionDataStr = JSON.stringify(dbSession.metadata);
+                    isFromDatabase = true;
+                    logger.info(`OAuth session retrieved from database fallback for state: ${state}`);
+                }
+            } else {
+                logger.info(`OAuth session retrieved from Redis for state: ${state}`);
+            }
+            
+            if (sessionDataStr) {
                 // Handle public OAuth flow
-                const session = JSON.parse(sessionData);
+                const session = JSON.parse(sessionDataStr);
                 const result = await this.googleOAuth.handlePublicCallback(code, state, session);
                 
-                // Clean up session
-                await redisClient.del(`oauth_session:${state}`);
+                // Clean up session from both Redis and database
+                if (!isFromDatabase) {
+                    await redisClient.del(`oauth_session:${state}`);
+                } else {
+                    await prisma.oAuthState.delete({
+                        where: { state }
+                    });
+                }
                 
                 // Redirect back to app with JWT token
                 const returnUrl = session.returnUrl || `${process.env.FRONTEND_URL || 'voiceassistant://oauth'}`;
@@ -120,17 +142,39 @@ class OAuthController {
                 return res.redirect(`${process.env.FRONTEND_URL || 'voiceassistant://oauth'}?error=missing_parameters`);
             }
             
-            // Check if this is a public OAuth flow
+            // Check if this is a public OAuth flow (Redis first, then database fallback)
             const { redis: redisClient } = require('../config/redis');
-            const sessionData = await redisClient.get(`oauth_session:${state}`);
+            let sessionDataStr = await redisClient.get(`oauth_session:${state}`);
+            let isFromDatabase = false;
             
-            if (sessionData) {
+            // If not found in Redis, check database
+            if (!sessionDataStr) {
+                const dbSession = await prisma.oAuthState.findUnique({
+                    where: { state }
+                });
+                
+                if (dbSession && dbSession.metadata) {
+                    sessionDataStr = JSON.stringify(dbSession.metadata);
+                    isFromDatabase = true;
+                    logger.info(`Airtable OAuth session retrieved from database fallback for state: ${state}`);
+                }
+            } else {
+                logger.info(`Airtable OAuth session retrieved from Redis for state: ${state}`);
+            }
+            
+            if (sessionDataStr) {
                 // Handle public OAuth flow
-                const session = JSON.parse(sessionData);
+                const session = JSON.parse(sessionDataStr);
                 const result = await this.airtableOAuth.handlePublicCallback(code, state, session);
                 
-                // Clean up session
-                await redisClient.del(`oauth_session:${state}`);
+                // Clean up session from both Redis and database
+                if (!isFromDatabase) {
+                    await redisClient.del(`oauth_session:${state}`);
+                } else {
+                    await prisma.oAuthState.delete({
+                        where: { state }
+                    });
+                }
                 
                 // Redirect back to app with JWT token
                 const returnUrl = session.returnUrl || `${process.env.FRONTEND_URL || 'voiceassistant://oauth'}`;
@@ -164,7 +208,7 @@ class OAuthController {
             // Generate secure state token
             const state = crypto.randomBytes(32).toString('hex');
             
-            // Store OAuth session in Redis (5 minutes expiry)
+            // Store OAuth session in Redis (5 minutes expiry) with database fallback
             const sessionData = {
                 deviceId,
                 returnUrl,
@@ -173,8 +217,27 @@ class OAuthController {
             };
             
             // Store in Redis with expiration
-            const { redis: redisClient } = require('../config/redis');
-            await redisClient.setex(`oauth_session:${state}`, 300, JSON.stringify(sessionData));
+            const { redis: redisClient, isRedisAvailable } = require('../config/redis');
+            
+            try {
+                await redisClient.setex(`oauth_session:${state}`, 300, JSON.stringify(sessionData));
+                logger.info(`OAuth session stored in Redis for state: ${state}`);
+            } catch (error) {
+                logger.warn('Redis storage failed, using database fallback:', error);
+                
+                // Fallback: store in database if Redis fails
+                await prisma.oAuthState.create({
+                    data: {
+                        state,
+                        userId: null, // Public OAuth, no user yet
+                        provider: 'google',
+                        returnUrl: sessionData.returnUrl,
+                        expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes
+                        metadata: sessionData // Store the full session data
+                    }
+                });
+                logger.info(`OAuth session stored in database as fallback for state: ${state}`);
+            }
             
             // Create Google OAuth URL
             const result = await this.googleOAuth.createAuthUrl(state, returnUrl);
@@ -210,7 +273,7 @@ class OAuthController {
             // Create Airtable OAuth URL (this now returns codeVerifier for PKCE)
             const result = await this.airtableOAuth.createAuthUrl(state, returnUrl);
             
-            // Store OAuth session in Redis (5 minutes expiry) with codeVerifier
+            // Store OAuth session in Redis (5 minutes expiry) with codeVerifier and database fallback
             const sessionData = {
                 deviceId,
                 returnUrl,
@@ -221,7 +284,27 @@ class OAuthController {
             
             // Store in Redis with expiration
             const { redis: redisClient } = require('../config/redis');
-            await redisClient.setex(`oauth_session:${state}`, 300, JSON.stringify(sessionData));
+            
+            try {
+                await redisClient.setex(`oauth_session:${state}`, 300, JSON.stringify(sessionData));
+                logger.info(`Airtable OAuth session stored in Redis for state: ${state}`);
+            } catch (error) {
+                logger.warn('Redis storage failed for Airtable OAuth, using database fallback:', error);
+                
+                // Fallback: store in database if Redis fails
+                await prisma.oAuthState.create({
+                    data: {
+                        state,
+                        userId: null, // Public OAuth, no user yet
+                        provider: 'airtable',
+                        returnUrl: sessionData.returnUrl,
+                        codeVerifier: sessionData.codeVerifier, // Store PKCE code verifier
+                        expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes
+                        metadata: sessionData // Store the full session data
+                    }
+                });
+                logger.info(`Airtable OAuth session stored in database as fallback for state: ${state}`);
+            }
             
             res.json({
                 success: true,

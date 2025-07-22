@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const logger = require('../utils/logger');
+const { authenticateToken } = require('../services/auth/middleware');
 
-// Diagnostic endpoint to check OAuth configuration
-router.get('/oauth-config', async (req, res) => {
+// SECURITY FIX: Add authentication to diagnostics endpoint
+router.get('/oauth-config', authenticateToken, async (req, res) => {
     try {
         // Log for debugging
         logger.info('OAuth configuration check requested');

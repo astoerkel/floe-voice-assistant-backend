@@ -1,9 +1,14 @@
-const langChainService = require('../ai/langchain');
+// Legacy imports (keeping for backward compatibility)
+const { getLangChainService } = require('../ai/langchain-fixed');
 const intentClassifier = require('../ai/intentClassifier');
-const calendarAgent = require('./calendarAgent');
-const emailAgent = require('./emailAgent');
-const taskAgent = require('./taskAgent');
+const legacyCalendarAgent = require('./calendarAgent');
+const legacyEmailAgent = require('./emailAgent');
+const legacyTaskAgent = require('./taskAgent');
 const weatherAgent = require('./weatherAgent');
+
+// New LangChain coordinator system
+const VoiceAssistantCoordinator = require('../ai/coordinator');
+
 const { prisma } = require('../../config/database');
 const logger = require('../../utils/logger');
 
@@ -12,17 +17,24 @@ class CoordinatorAgent {
     this.agentName = 'coordinator';
     this.specializedAgents = new Map();
     this.conversationCache = new Map();
+    this.langChainService = getLangChainService();
+    
+    // Initialize new LangChain coordinator
+    this.voiceAssistantCoordinator = new VoiceAssistantCoordinator();
+    
     this.initializeSpecializedAgents();
+    
+    logger.info('CoordinatorAgent initialized with new LangChain coordinator');
   }
 
   initializeSpecializedAgents() {
-    // Register all specialized agents
-    this.registerSpecializedAgent('calendar', calendarAgent);
-    this.registerSpecializedAgent('email', emailAgent);
-    this.registerSpecializedAgent('task', taskAgent);
+    // Register legacy specialized agents for fallback
+    this.registerSpecializedAgent('calendar', legacyCalendarAgent);
+    this.registerSpecializedAgent('email', legacyEmailAgent);
+    this.registerSpecializedAgent('task', legacyTaskAgent);
     this.registerSpecializedAgent('weather', weatherAgent);
     
-    logger.info('Specialized agents initialized:', Array.from(this.specializedAgents.keys()));
+    logger.info('Legacy specialized agents initialized:', Array.from(this.specializedAgents.keys()));
   }
 
   async registerSpecializedAgent(name, agent) {
@@ -31,11 +43,12 @@ class CoordinatorAgent {
   }
 
   async processVoiceCommand(userId, input, context = {}) {
+    let voiceCommand;
     try {
       const startTime = Date.now();
       
       // Store the voice command in database
-      const voiceCommand = await prisma.voiceCommand.create({
+      voiceCommand = await prisma.voiceCommand.create({
         data: {
           userId,
           text: input,
@@ -50,7 +63,79 @@ class CoordinatorAgent {
         input: input.substring(0, 100)
       });
 
-      // Classify intent
+      // Try new LangChain coordinator first
+      try {
+        const coordinatorResult = await this.voiceAssistantCoordinator.processRequest(userId, input, context);
+        
+        if (coordinatorResult.success) {
+          const executionTime = Date.now() - startTime;
+
+          // Update voice command with response
+          await prisma.voiceCommand.update({
+            where: { id: voiceCommand.id },
+            data: {
+              response: coordinatorResult.response,
+              status: 'completed',
+              executionTime,
+              agentUsed: coordinatorResult.intent || 'coordinator',
+              intent: coordinatorResult.intent
+            }
+          });
+
+          logger.info(`Voice command completed with new coordinator for user ${userId}:`, {
+            commandId: voiceCommand.id,
+            intent: coordinatorResult.intent,
+            agentUsed: coordinatorResult.intent || 'coordinator',
+            executionTime
+          });
+
+          return {
+            success: true,
+            response: coordinatorResult.response,
+            intent: coordinatorResult.intent,
+            confidence: coordinatorResult.confidence,
+            agentUsed: coordinatorResult.intent || 'coordinator',
+            executionTime,
+            actions: coordinatorResult.actions || [],
+            suggestions: [],
+            audioData: coordinatorResult.audioData
+          };
+        } else {
+          logger.warn('New coordinator failed, falling back to legacy system:', coordinatorResult.error);
+          throw new Error(`Coordinator failed: ${coordinatorResult.error}`);
+        }
+      } catch (coordinatorError) {
+        logger.warn('New LangChain coordinator failed, falling back to legacy system:', coordinatorError.message);
+        
+        // Fallback to legacy system
+        return await this.processWithLegacySystem(userId, input, context, voiceCommand, startTime);
+      }
+    } catch (error) {
+      logger.error('Coordinator agent processing failed:', error);
+      
+      // Update command with error
+      if (voiceCommand?.id) {
+        await prisma.voiceCommand.update({
+          where: { id: voiceCommand.id },
+          data: {
+            status: 'failed',
+            error: error.message
+          }
+        });
+      }
+
+      return {
+        success: false,
+        error: error.message,
+        response: "I'm sorry, I'm having trouble processing that right now. Could you please try again?",
+        agentUsed: this.agentName
+      };
+    }
+  }
+
+  async processWithLegacySystem(userId, input, context, voiceCommand, startTime) {
+    try {
+      // Classify intent using legacy system
       const intentResult = await intentClassifier.classifyIntent(input);
       
       // Update command with intent
@@ -105,7 +190,7 @@ class CoordinatorAgent {
         executionTime
       });
 
-      logger.info(`Voice command completed for user ${userId}:`, {
+      logger.info(`Voice command completed with legacy system for user ${userId}:`, {
         commandId: voiceCommand.id,
         intent: intentResult.intent,
         agentUsed,
@@ -123,32 +208,25 @@ class CoordinatorAgent {
         suggestions: response.suggestions || []
       };
     } catch (error) {
-      logger.error('Coordinator agent processing failed:', error);
-      
-      // Update command with error
-      if (voiceCommand?.id) {
-        await prisma.voiceCommand.update({
-          where: { id: voiceCommand.id },
-          data: {
-            status: 'failed',
-            errorMessage: error.message
-          }
-        });
-      }
-
-      return {
-        success: false,
-        error: error.message,
-        response: "I'm sorry, I'm having trouble processing that right now. Could you please try again?",
-        agentUsed: this.agentName
-      };
+      logger.error('Legacy system processing failed:', error);
+      throw error;
     }
   }
 
   async handleGeneralCommand(userId, input, context) {
     try {
+      // Check if LangChain service is available
+      if (!this.langChainService.isAvailable()) {
+        logger.warn('LangChain service not available, using fallback');
+        return {
+          text: this.generateFallbackResponse(input),
+          actions: [],
+          suggestions: this.generateSuggestions(input)
+        };
+      }
+      
       // Use LangChain service for general processing
-      const result = await langChainService.processVoiceCommand(userId, input, context);
+      const result = await this.langChainService.processVoiceCommand(userId, input, context);
       
       if (result.success) {
         return {
@@ -295,7 +373,9 @@ class CoordinatorAgent {
       });
 
       // Clear memory from LangChain service
-      langChainService.clearUserMemory(userId);
+      if (this.langChainService.isAvailable()) {
+        this.langChainService.clearUserMemory(userId);
+      }
       
       // Clear cache
       this.conversationCache.delete(userId);

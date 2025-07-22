@@ -19,6 +19,8 @@ logs/
 gcp-key.json
 service-account.json
 voice-assistant-ios-key.json
+floe-voice-assistant-*.json
+*.env.hetzner-production
 
 # IDE
 .vscode/

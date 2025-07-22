@@ -3,7 +3,16 @@ const logger = require('../utils/logger');
 // Simple API key authentication middleware
 const authenticateApiKey = (req, res, next) => {
   const apiKey = req.headers['x-api-key'] || req.headers['authorization']?.replace('Bearer ', '');
-  const validApiKey = process.env.API_KEY || process.env.API_KEY_ENV || 'voice-assistant-api-key-2024';
+  // SECURITY FIX: Remove hardcoded API key fallback
+  const validApiKey = process.env.API_KEY || process.env.API_KEY_ENV;
+  
+  if (!validApiKey) {
+    logger.error('SECURITY: API key not configured in environment variables');
+    return res.status(500).json({ 
+      error: 'Server configuration error', 
+      message: 'Authentication service unavailable' 
+    });
+  }
   
   if (!apiKey) {
     logger.warn('API request without API key', { 

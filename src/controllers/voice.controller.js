@@ -1,4 +1,5 @@
 const coordinatorAgent = require('../services/agents/coordinatorAgent');
+const VoiceAssistantCoordinator = require('../services/ai/coordinator');
 const speechToText = require('../services/ai/speechToText');
 const textToSpeech = require('../services/ai/textToSpeech');
 const speechAnalytics = require('../services/analytics/speechAnalytics');
@@ -8,6 +9,10 @@ const { body, validationResult } = require('express-validator');
 const queueService = require('../services/queue');
 
 class VoiceController {
+  constructor() {
+    this.coordinator = new VoiceAssistantCoordinator();
+  }
+
   // Process text-only command (primary method for Apple Speech Framework)
   async processText(req, res) {
     const startTime = Date.now();
@@ -36,17 +41,45 @@ class VoiceController {
         });
       }
 
+      // Get user's preferred name from existing user system
+      // Note: Remove preferred_name field temporarily until database migration is run
+      let user = null;
+      let userName = 'there';
+      
+      try {
+        user = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { 
+            id: true, 
+            name: true, 
+            email: true 
+          }
+        });
+        userName = user?.name || 'there';
+      } catch (dbError) {
+        logger.warn(`Database unavailable for user lookup: ${dbError.message}`);
+        // Continue with default values - this allows the system to work without database
+      }
+
       // Add platform-specific context
       const enhancedContext = {
         ...context,
         platform,
         userId,
         transcriptionMethod: 'apple_speech',
-        sessionId: context.sessionId || `session_${Date.now()}_${userId}`
+        sessionId: context.sessionId || `session_${Date.now()}_${userId}`,
+        startTime
       };
 
-      // Process with AI
-      const result = await coordinatorAgent.processVoiceCommand(userId, text, enhancedContext);
+      // Try new LangChain coordinator first, fallback to legacy on failure
+      let result;
+      try {
+        result = await this.coordinator.processRequest(userId, text, enhancedContext);
+        logger.info(`LangChain coordinator processed: ${text.substring(0, 50)}...`);
+      } catch (langchainError) {
+        logger.warn('LangChain coordinator failed, falling back to legacy:', langchainError.message);
+        result = await coordinatorAgent.processVoiceCommand(userId, text, enhancedContext);
+      }
 
       // Generate voice response
       const audioResponse = await this.generateVoiceResponse(
@@ -67,23 +100,46 @@ class VoiceController {
         platform
       );
 
+      // Determine overall success: 
+      // Success should be true if TTS generates audio successfully OR if we have a valid text response,
+      // regardless of minor coordinator issues. This ensures the client gets a proper response
+      // even when there are internal processing warnings or fallbacks.
+      const hasValidResponse = result.response && result.response.trim().length > 0;
+      const hasValidAudio = audioResponse?.audioBase64;
+      const overallSuccess = hasValidAudio || (hasValidResponse && result.success !== false);
+
+      // Log success determination for debugging
+      logger.info('Voice response success determination:', {
+        coordinatorSuccess: result.success,
+        hasValidResponse,
+        hasValidAudio,
+        overallSuccess,
+        userId
+      });
+
       res.json({
-        success: result.success,
+        success: overallSuccess,
         processingTime,
         transcriptionMethod: 'apple_speech',
         text: text,
         intent: result.intent,
         confidence: result.confidence,
-        agentUsed: result.agentUsed,
+        agentUsed: result.agentUsed || result.agent,
         executionTime: result.executionTime,
-        response: result.response,
+        response: {
+          text: result.response,
+          audioUrl: audioResponse?.audioBase64 ? `data:audio/mp3;base64,${audioResponse.audioBase64}` : null,
+          hapticPattern: this.getHapticPattern(result.intent || result.action?.type)
+        },
         audioResponse,
+        action: result.action,
         actions: result.actions || [],
         suggestions: result.suggestions || [],
         sessionId: enhancedContext.sessionId,
-        updates: {
-          hapticPattern: this.getHapticPattern(result.intent)
-        }
+        usage: result.usage || {},
+        coordinatorUsed: result.agentUsed ? 'langchain' : 'legacy',
+        // Include coordinator success for debugging
+        coordinatorSuccess: result.success
       });
       
     } catch (error) {
@@ -175,8 +231,16 @@ class VoiceController {
 
       const totalProcessingTime = Date.now() - startTime;
 
+      // Determine overall success: 
+      // Success should be true if TTS generates audio successfully OR if we have a valid text response,
+      // regardless of minor coordinator issues. This ensures the client gets a proper response
+      // even when there are internal processing warnings or fallbacks.
+      const hasValidResponse = result.response && result.response.trim().length > 0;
+      const hasValidAudio = audioResponse?.audioBase64;
+      const overallSuccess = hasValidAudio || (hasValidResponse && result.success !== false);
+
       res.json({
-        success: result.success,
+        success: overallSuccess,
         processingTime: totalProcessingTime,
         transcriptionTime,
         transcriptionMethod: 'whisper',
@@ -196,7 +260,9 @@ class VoiceController {
         sessionId,
         updates: {
           hapticPattern: this.getHapticPattern(result.intent)
-        }
+        },
+        // Include coordinator success for debugging
+        coordinatorSuccess: result.success
       });
     } catch (error) {
       logger.error('Voice audio processing failed:', error);
@@ -245,8 +311,16 @@ class VoiceController {
         }
       }
 
+      // Determine overall success: 
+      // Success should be true if TTS generates audio successfully OR if we have a valid text response,
+      // regardless of minor coordinator issues. This ensures the client gets a proper response
+      // even when there are internal processing warnings or fallbacks.
+      const hasValidResponse = result.response && result.response.trim().length > 0;
+      const hasValidAudio = audioResponse?.audioBase64;
+      const overallSuccess = hasValidAudio || (hasValidResponse && result.success !== false);
+
       res.json({
-        success: result.success,
+        success: overallSuccess,
         response: result.response,
         audioResponse,
         intent: result.intent,
@@ -255,7 +329,9 @@ class VoiceController {
         executionTime: result.executionTime,
         actions: result.actions || [],
         suggestions: result.suggestions || [],
-        sessionId
+        sessionId,
+        // Include coordinator success for debugging
+        coordinatorSuccess: result.success
       });
     } catch (error) {
       logger.error('Voice processing failed:', error);
@@ -727,8 +803,13 @@ class VoiceController {
           userId
         );
 
+        // Determine overall success: if we have audio response OR valid text response, consider it successful
+        const hasValidResponse = result.response && result.response.trim().length > 0;
+        const hasValidAudio = audioResponse?.audioBase64;
+        const overallSuccess = hasValidAudio || (hasValidResponse && result.success !== false);
+
         res.json({
-          success: true,
+          success: overallSuccess,
           final: true,
           text: text,
           intent: result.intent,
@@ -736,7 +817,9 @@ class VoiceController {
           audioResponse,
           updates: {
             hapticPattern: this.getHapticPattern(result.intent)
-          }
+          },
+          // Include coordinator success for debugging
+          coordinatorSuccess: result.success
         });
       } else {
         // Handle partial results
@@ -868,9 +951,43 @@ const processVoiceAudioValidation = [
 ];
 
 const processTextValidation = [
-  body('text').notEmpty().withMessage('Text is required'),
-  body('context').optional().isObject().withMessage('Context must be an object'),
-  body('platform').optional().isString().withMessage('Platform must be a string')
+  // SECURITY FIX: Enhanced input sanitization and validation
+  body('text')
+    .notEmpty()
+    .withMessage('Text is required')
+    .isLength({ max: 1000 })
+    .withMessage('Text must not exceed 1000 characters')
+    .matches(/^[\w\s\-.,!?'"():;@#$%&*+=\[\]{}<>\/\\|`~\u00C0-\u017F\u0100-\u024F\u1E00-\u1EFF]*$/)
+    .withMessage('Text contains invalid characters')
+    .customSanitizer((value) => {
+      // Remove potential script tags and HTML
+      return value.replace(/<[^>]*>/g, '').replace(/javascript:/gi, '').trim();
+    }),
+  body('context')
+    .optional()
+    .isObject()
+    .withMessage('Context must be an object')
+    .customSanitizer((value) => {
+      // Sanitize context object keys and values
+      if (typeof value === 'object' && value !== null) {
+        const sanitized = {};
+        for (const [key, val] of Object.entries(value)) {
+          const cleanKey = String(key).replace(/<[^>]*>/g, '').slice(0, 100);
+          const cleanVal = typeof val === 'string' 
+            ? String(val).replace(/<[^>]*>/g, '').slice(0, 500)
+            : val;
+          sanitized[cleanKey] = cleanVal;
+        }
+        return sanitized;
+      }
+      return value;
+    }),
+  body('platform')
+    .optional()
+    .isString()
+    .withMessage('Platform must be a string')
+    .isIn(['ios', 'watchos', 'web', 'android'])
+    .withMessage('Platform must be one of: ios, watchos, web, android')
 ];
 
 const synthesizeSpeechValidation = [

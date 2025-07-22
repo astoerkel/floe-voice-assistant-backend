@@ -12,14 +12,14 @@ const gcpConfig = {
   database: {
     connectionName: process.env.CLOUD_SQL_CONNECTION_NAME || 'floe-voice-assistant:us-central1:voice-assistant-postgres',
     socketPath: process.env.DB_SOCKET_PATH || '/cloudsql',
-    useCloudSqlConnector: process.env.NODE_ENV === 'production'
+    useCloudSqlConnector: process.env.USE_CLOUD_SQL === 'true'
   },
   
   // Redis configuration for Google Cloud Memorystore
   redis: {
     host: process.env.REDIS_HOST || '10.244.122.235',
     port: process.env.REDIS_PORT || 6379,
-    useMemorystore: process.env.NODE_ENV === 'production'
+    useMemorystore: process.env.USE_MEMORYSTORE === 'true'
   },
   
   // Cloud Storage configuration

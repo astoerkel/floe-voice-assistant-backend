@@ -14,6 +14,9 @@ model User {
   id                String   @id @default(cuid())
   email             String   @unique
   name              String?
+  preferredName     String?  // Added for personalization
+  timezone          String?  // Added for personalization
+  lastActiveAt      DateTime? // Added for context management
   provider          String   @default("apple") // 'apple', 'google', 'email'
   providerId        String?
   appleId           String?  @unique
@@ -49,6 +52,8 @@ model User {
   notifications     Notification[]
   notificationPreferences NotificationPreference?
   transcriptionEvents TranscriptionEvent[]
+  userPreferences   UserPreferences?  // Added for personalization
+  userLearningData  UserLearningData[] // Added for learning
 
   @@index([email])
   @@index([subscriptionStatus])
@@ -435,3 +440,84 @@ model OAuthState {
   @@index([expiresAt])
   @@map("oauth_states")
 }
+
+// Models for LangChain Coordinator
+
+model ConversationLog {
+  id                String   @id @default(cuid())
+  userId            String
+  userInput         String
+  assistantResponse String
+  intent            String?
+  confidence        Float?
+  reasoning         String?
+  entities          Json?    // Array of extracted entities
+  actions           Json?    // Array of actions performed
+  metadata          Json?    // Additional metadata
+  createdAt         DateTime @default(now())
+  
+  @@index([userId, createdAt])
+  @@index([intent])
+  @@map("conversation_logs")
+}
+
+model ConversationContext {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  data      Json     // Context data including history, session info, etc.
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("conversation_contexts")
+}
+
+model UserPreferences {
+  id                      String   @id @default(cuid())
+  userId                  String   @unique
+  responseLength          String?  // brief, balanced, detailed
+  communicationFormality  String?  // formal, balanced, casual
+  responseVerbosity       String?  // brief, balanced, detailed
+  enthusiasmLevel         String?  // low, balanced, high
+  reminderStyle           String?  // formal, friendly, urgent
+  defaultMeetingDuration  Int?     // minutes
+  workStartTime           String?  // HH:MM
+  workEndTime             String?  // HH:MM
+  workDays                String?  // JSON array of work days
+  busyPeriods             String?  // JSON array of busy periods
+  priorityCategories      String?  // JSON array of priority categories
+  timezone                String?
+  preferredInteractionTime String? // morning, afternoon, evening, night
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  
+  // Relationships
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("user_preferences")
+}
+
+model UserLearningData {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  interactionType String?  // voice_command, conversation, etc.
+  userInput       String
+  assistantResponse String?
+  userFeedback    String?  // positive, negative, neutral
+  intent          String?
+  confidence      Float?
+  responseTime    Int?     // milliseconds
+  wasHelpful      Boolean?
+  integrationUsed String?
+  metadata        Json?    // timeOfDay, dayOfWeek, contextLength, etc.
+  createdAt       DateTime @default(now())
+  
+  @@index([userId, createdAt])
+  @@index([intent])
+  @@index([userFeedback])
+  @@map("user_learning_data")
+}
+

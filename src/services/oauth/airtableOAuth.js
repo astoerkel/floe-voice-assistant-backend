@@ -365,16 +365,16 @@ class AirtableOAuthService {
                 }
             });
             
-            // Generate JWT token for the user
+            // Generate JWT tokens for the user
             const jwtService = require('../auth/jwt');
-            const jwtToken = jwtService.generateAccessToken(user.id);
+            const { accessToken } = jwtService.generateTokens(user.id);
             
             logger.info(`Airtable OAuth completed for user ${user.id}`);
             
             return {
                 integration,
                 user,
-                jwtToken,
+                jwtToken: accessToken,
                 returnUrl: sessionData.returnUrl
             };
             

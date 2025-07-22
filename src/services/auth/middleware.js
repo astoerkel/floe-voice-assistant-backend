@@ -11,9 +11,9 @@ const authenticateToken = async (req, res, next) => {
       return res.status(401).json({ error: 'Access token required' });
     }
     
-    // Check for development mode mock tokens (allow in both development and production for testing)
-    if (token === 'mock_access_token_for_development' || token.startsWith('mock_')) {
-      logger.info('Development authentication: Using mock authentication token');
+    // SECURITY FIX: Only allow mock tokens in development environment
+    if (process.env.NODE_ENV === 'development' && (token === 'mock_access_token_for_development' || token.startsWith('mock_'))) {
+      logger.info('Development authentication: Using mock authentication token (DEV MODE ONLY)');
       
       // Create a mock user for development
       req.user = {
@@ -25,6 +25,15 @@ const authenticateToken = async (req, res, next) => {
       };
       
       return next();
+    }
+    
+    // In production, reject all mock tokens
+    if (token === 'mock_access_token_for_development' || token.startsWith('mock_')) {
+      logger.warn('SECURITY: Mock token rejected in production environment', {
+        ip: req.ip,
+        userAgent: req.get('User-Agent')
+      });
+      return res.status(401).json({ error: 'Invalid authentication method' });
     }
     
     const decoded = jwtService.verifyAccessToken(token);
@@ -82,9 +91,9 @@ const optionalAuth = async (req, res, next) => {
       return next();
     }
     
-    // Check for development mode mock tokens (allow in both development and production for testing)
-    if (token === 'mock_access_token_for_development' || token.startsWith('mock_')) {
-      logger.info('Development authentication: Using mock authentication token (optional)');
+    // SECURITY FIX: Only allow mock tokens in development environment
+    if (process.env.NODE_ENV === 'development' && (token === 'mock_access_token_for_development' || token.startsWith('mock_'))) {
+      logger.info('Development authentication: Using mock authentication token (optional, DEV MODE ONLY)');
       
       req.user = {
         id: 'dev-user-123',
@@ -94,6 +103,16 @@ const optionalAuth = async (req, res, next) => {
         lastActive: new Date()
       };
       
+      return next();
+    }
+    
+    // In production, silently reject mock tokens and continue without user
+    if (token === 'mock_access_token_for_development' || token.startsWith('mock_')) {
+      logger.warn('SECURITY: Mock token rejected in production environment (optional auth)', {
+        ip: req.ip,
+        userAgent: req.get('User-Agent')
+      });
+      req.user = null;
       return next();
     }
     
