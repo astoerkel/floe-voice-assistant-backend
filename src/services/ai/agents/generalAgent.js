@@ -7,22 +7,93 @@ class GeneralAgent {
   constructor() {
     this.agentName = 'GeneralAgent';
     
-    // Initialize LLM with same configuration as coordinator
-    this.llm = new ChatOpenAI({
-      modelName: 'gpt-4o',
-      temperature: 0.7, // Higher temperature for more creative responses
-      maxTokens: 1500,
-      openAIApiKey: process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY,
-      configuration: {
-        baseURL: process.env.OPENROUTER_API_KEY ? 'https://openrouter.ai/api/v1' : undefined,
-        defaultHeaders: process.env.OPENROUTER_API_KEY ? {
-          'HTTP-Referer': process.env.APP_URL || 'https://voiceassistant.com',
-          'X-Title': 'Voice Assistant General'
-        } : {}
-      }
-    });
+    // Initialize LLM with production configuration (OpenRouter primary, OpenAI fallback)
+    this.initializeLLMs();
 
     logger.info('GeneralAgent initialized');
+  }
+
+  /**
+   * Initialize LLMs with OpenRouter primary and OpenAI fallback for production
+   */
+  initializeLLMs() {
+    try {
+      // Primary LLM: OpenRouter GPT-4o
+      if (process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY.startsWith('sk-or-')) {
+        this.primaryLLM = new ChatOpenAI({
+          modelName: 'gpt-4o',
+          temperature: 0.7,
+          maxTokens: 1500,
+          openAIApiKey: process.env.OPENROUTER_API_KEY,
+          configuration: {
+            baseURL: 'https://openrouter.ai/api/v1',
+            defaultHeaders: {
+              'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://floe.cognetica.de',
+              'X-Title': 'Voice Assistant General'
+            }
+          }
+        });
+        logger.debug('GeneralAgent: OpenRouter LLM initialized as primary');
+      }
+
+      // Fallback LLM: Direct OpenAI GPT-4o
+      if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.startsWith('sk-proj-')) {
+        this.fallbackLLM = new ChatOpenAI({
+          modelName: 'gpt-4o',
+          temperature: 0.7,
+          maxTokens: 1500,
+          openAIApiKey: process.env.OPENAI_API_KEY
+          // No custom baseURL - direct OpenAI API
+        });
+        logger.debug('GeneralAgent: OpenAI LLM initialized as fallback');
+      }
+
+      // Set the active LLM (prefer primary, fallback to fallback)
+      this.llm = this.primaryLLM || this.fallbackLLM;
+      
+      if (!this.llm) {
+        throw new Error('GeneralAgent: No valid LLM configuration found');
+      }
+
+    } catch (error) {
+      logger.error('GeneralAgent: Failed to initialize LLMs:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Execute LLM call with automatic fallback to secondary provider
+   */
+  async callLLMWithFallback(chain, params) {
+    try {
+      // Try primary LLM first
+      if (this.primaryLLM) {
+        const primaryChain = chain.llm === this.llm ? chain : new LLMChain({
+          llm: this.primaryLLM,
+          prompt: chain.prompt
+        });
+        const result = await primaryChain.call(params);
+        return result;
+      }
+    } catch (primaryError) {
+      // Try fallback LLM
+      if (this.fallbackLLM) {
+        try {
+          const fallbackChain = new LLMChain({
+            llm: this.fallbackLLM,
+            prompt: chain.prompt
+          });
+          const result = await fallbackChain.call(params);
+          logger.debug('GeneralAgent: Fallback LLM success');
+          return result;
+        } catch (fallbackError) {
+          logger.error('GeneralAgent: Both LLMs failed:', fallbackError.message);
+          throw fallbackError;
+        }
+      }
+      
+      throw primaryError;
+    }
   }
 
   /**
@@ -91,15 +162,16 @@ class GeneralAgent {
    */
   async classifyGeneralRequest(userInput, context) {
     try {
+      // Use LLM for natural language classification
       const classificationPrompt = PromptTemplate.fromTemplate(`
-        Classify this general request into one of the following categories:
+        Classify this user request into the most appropriate category based on their intent:
 
         User Input: "{input}"
         Context: {context}
 
         Categories:
         - information: Questions seeking factual information, explanations, definitions
-        - conversation: Greetings, small talk, casual conversation
+        - conversation: Greetings, small talk, casual conversation  
         - assistance: Requests for help with general tasks or decision-making
         - planning: Help with planning activities, trips, schedules
         - weather: Weather-related questions
@@ -107,11 +179,11 @@ class GeneralAgent {
         - calculation: Math calculations, unit conversions
         - help: Questions about the assistant's capabilities or how to use features
 
-        Respond with JSON:
+        Analyze the user's intent and respond with JSON:
         {{
           "category": "one of the above categories",
           "confidence": 0.0-1.0,
-          "reasoning": "brief explanation"
+          "reasoning": "brief explanation of why this category fits"
         }}
       `);
 
@@ -120,7 +192,7 @@ class GeneralAgent {
         prompt: classificationPrompt
       });
 
-      const result = await chain.call({
+      const result = await this.callLLMWithFallback(chain, {
         input: userInput,
         context: JSON.stringify(context, null, 2)
       });
@@ -364,23 +436,36 @@ class GeneralAgent {
     try {
       const now = new Date();
       const timeInfo = {
-        current: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        date: now.toLocaleDateString(),
-        day: now.toLocaleDateString([], { weekday: 'long' }),
+        current: now.toLocaleTimeString('en-GB', { 
+          hour: '2-digit', 
+          minute: '2-digit',
+          hour12: false 
+        }),
+        date: now.toLocaleDateString('en-GB'),
+        day: now.toLocaleDateString('en-GB', { weekday: 'long' }),
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
       };
 
+      // Always use LLM for natural language responses
       const timePrompt = PromptTemplate.fromTemplate(`
+        ${systemPrompt}
+
         USER REQUEST: "{input}"
         
-        Current time information:
+        Current time information (use this to answer their question):
         Time: {time}
         Date: {date}
         Day: {day}
         Timezone: {timezone}
 
-        Respond to their time-related question using this information.
-        Keep response under 30 words and voice-optimized.
+        Respond naturally and conversationally to their time-related question.
+        Use the current time information to give them exactly what they asked for.
+        Be helpful and friendly. Keep it concise but natural (under 30 words).
+        
+        Examples of good responses:
+        - "It's currently 16:30 on Tuesday, 22nd July."
+        - "Right now it's 4:30 PM on a Tuesday afternoon."
+        - "The time is 16:30, and today is Tuesday the 22nd."
       `);
 
       const chain = new LLMChain({
@@ -388,7 +473,7 @@ class GeneralAgent {
         prompt: timePrompt
       });
 
-      const result = await chain.call({
+      const result = await this.callLLMWithFallback(chain, {
         input: userInput,
         time: timeInfo.current,
         date: timeInfo.date,
@@ -403,10 +488,11 @@ class GeneralAgent {
 
     } catch (error) {
       logger.error('Error handling time request:', error);
+      // Only use fallback if LLM completely fails
       const now = new Date();
       return {
-        text: `It's currently ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} on ${now.toLocaleDateString([], { weekday: 'long' })}.`,
-        actions: []
+        text: `It's currently ${now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })} on ${now.toLocaleDateString('en-GB', { weekday: 'long' })}.`,
+        actions: ['provide_time_info']
       };
     }
   }

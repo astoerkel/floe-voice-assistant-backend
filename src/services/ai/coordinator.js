@@ -25,20 +25,8 @@ class VoiceAssistantCoordinator {
   constructor() {
     this.serviceName = 'voice_assistant_coordinator';
     
-    // Initialize OpenRouter/OpenAI client for GPT-4o
-    this.llm = new ChatOpenAI({
-      modelName: 'gpt-4o',
-      temperature: 0.7,
-      maxTokens: 2000,
-      openAIApiKey: process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY,
-      configuration: {
-        baseURL: process.env.OPENROUTER_API_KEY ? 'https://openrouter.ai/api/v1' : undefined,
-        defaultHeaders: process.env.OPENROUTER_API_KEY ? {
-          'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://floe.cognetica.de',
-          'X-Title': process.env.OPENROUTER_SITE_NAME || 'Voice Assistant'
-        } : {}
-      }
-    });
+    // Initialize primary LLM (OpenRouter) with OpenAI fallback for production
+    this.initializeLLMs();
 
     // Initialize service integrations
     this.calendarService = new GoogleCalendarIntegration();
@@ -59,6 +47,95 @@ class VoiceAssistantCoordinator {
     };
 
     logger.info('VoiceAssistantCoordinator initialized successfully');
+  }
+
+  /**
+   * Initialize LLMs with OpenRouter primary and OpenAI fallback for production
+   */
+  initializeLLMs() {
+    try {
+      // Primary LLM: OpenRouter GPT-4o
+      if (process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY.startsWith('sk-or-')) {
+        this.primaryLLM = new ChatOpenAI({
+          modelName: 'gpt-4o',
+          temperature: 0.7,
+          maxTokens: 2000,
+          openAIApiKey: process.env.OPENROUTER_API_KEY,
+          configuration: {
+            baseURL: 'https://openrouter.ai/api/v1',
+            defaultHeaders: {
+              'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://floe.cognetica.de',
+              'X-Title': process.env.OPENROUTER_SITE_NAME || 'VoiceAssistant'
+            }
+          }
+        });
+        logger.info('OpenRouter LLM initialized as primary');
+      }
+
+      // Fallback LLM: Direct OpenAI GPT-4o
+      if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.startsWith('sk-proj-')) {
+        this.fallbackLLM = new ChatOpenAI({
+          modelName: 'gpt-4o',
+          temperature: 0.7,
+          maxTokens: 2000,
+          openAIApiKey: process.env.OPENAI_API_KEY
+          // No custom baseURL - direct OpenAI API
+        });
+        logger.info('OpenAI LLM initialized as fallback');
+      }
+
+      // Set the active LLM (prefer primary, fallback to fallback, error if none)
+      this.llm = this.primaryLLM || this.fallbackLLM;
+      
+      if (!this.llm) {
+        throw new Error('No valid LLM configuration found. Please set OPENROUTER_API_KEY or OPENAI_API_KEY');
+      }
+
+      const usingProvider = this.primaryLLM ? 'OpenRouter' : 'OpenAI Direct';
+      logger.info(`LLM initialized using: ${usingProvider}`);
+
+    } catch (error) {
+      logger.error('Failed to initialize LLMs:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Execute LLM call with automatic fallback to secondary provider
+   */
+  async callLLMWithFallback(chain, params) {
+    try {
+      // Try primary LLM first
+      if (this.primaryLLM) {
+        const primaryChain = chain.llm === this.llm ? chain : new LLMChain({
+          llm: this.primaryLLM,
+          prompt: chain.prompt
+        });
+        const result = await primaryChain.call(params);
+        logger.debug('Primary LLM (OpenRouter) success');
+        return result;
+      }
+    } catch (primaryError) {
+      logger.warn('Primary LLM failed, trying fallback:', primaryError.message);
+      
+      // Try fallback LLM
+      if (this.fallbackLLM) {
+        try {
+          const fallbackChain = new LLMChain({
+            llm: this.fallbackLLM,
+            prompt: chain.prompt
+          });
+          const result = await fallbackChain.call(params);
+          logger.info('Fallback LLM (OpenAI Direct) success');
+          return result;
+        } catch (fallbackError) {
+          logger.error('Both primary and fallback LLMs failed:', fallbackError.message);
+          throw fallbackError;
+        }
+      }
+      
+      throw primaryError;
+    }
   }
 
   /**
@@ -132,7 +209,7 @@ class VoiceAssistantCoordinator {
   }
 
   /**
-   * Classify user intent using LLM
+   * Classify user intent using LLM with keyword-based fallback
    */
   async classifyIntent(userInput, context) {
     try {
@@ -163,7 +240,7 @@ class VoiceAssistantCoordinator {
         prompt: classificationPrompt
       });
 
-      const result = await chain.call({
+      const result = await this.callLLMWithFallback(chain, {
         input: userInput,
         context: JSON.stringify(context, null, 2)
       });
@@ -177,24 +254,62 @@ class VoiceAssistantCoordinator {
           entities: parsed.entities || []
         };
       } catch (parseError) {
-        logger.warn('Failed to parse intent classification response, using fallback');
-        return {
-          intent: 'general',
-          confidence: 0.3,
-          reasoning: 'Fallback due to parsing error',
-          entities: []
-        };
+        logger.warn('Failed to parse intent classification response, using keyword fallback');
+        return this.keywordBasedClassification(userInput);
       }
 
     } catch (error) {
-      logger.error('Error classifying intent:', error);
+      logger.error('Error classifying intent, using keyword fallback:', error);
+      return this.keywordBasedClassification(userInput);
+    }
+  }
+
+  /**
+   * Simple keyword-based intent classification fallback
+   */
+  keywordBasedClassification(userInput) {
+    const inputLower = userInput.toLowerCase();
+    
+    // Calendar keywords
+    const calendarKeywords = ['schedule', 'meeting', 'calendar', 'event', 'appointment', 'book', 'free time'];
+    if (calendarKeywords.some(keyword => inputLower.includes(keyword))) {
       return {
-        intent: 'general',
-        confidence: 0.1,
-        reasoning: 'Error in classification',
+        intent: 'calendar',
+        confidence: 0.7,
+        reasoning: 'Keyword-based classification for calendar',
         entities: []
       };
     }
+    
+    // Task keywords
+    const taskKeywords = ['task', 'todo', 'reminder', 'complete', 'finish', 'deadline', 'project'];
+    if (taskKeywords.some(keyword => inputLower.includes(keyword))) {
+      return {
+        intent: 'task',
+        confidence: 0.7,
+        reasoning: 'Keyword-based classification for tasks',
+        entities: []
+      };
+    }
+    
+    // Email keywords
+    const emailKeywords = ['email', 'message', 'send', 'reply', 'inbox', 'unread', 'mail'];
+    if (emailKeywords.some(keyword => inputLower.includes(keyword))) {
+      return {
+        intent: 'email',
+        confidence: 0.7,
+        reasoning: 'Keyword-based classification for email',
+        entities: []
+      };
+    }
+
+    // Default to general with higher confidence for keyword fallback
+    return {
+      intent: 'general',
+      confidence: 0.8,
+      reasoning: 'Keyword-based fallback to general',
+      entities: []
+    };
   }
 
   /**
@@ -222,7 +337,7 @@ class VoiceAssistantCoordinator {
         prompt: fallbackPrompt
       });
 
-      const result = await chain.call({
+      const result = await this.callLLMWithFallback(chain, {
         input: userInput,
         error: error.message
       });

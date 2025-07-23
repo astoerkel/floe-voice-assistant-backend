@@ -8,27 +8,20 @@
   },
   "scripts": {
     "start": "node start.js",
-    "start:simple": "node simple-start.js",
     "dev": "nodemon src/app.js",
     "build": "npx prisma generate",
     "worker": "node src/services/queue/worker.js",
     "migrate": "npx prisma migrate deploy",
     "postinstall": "npx prisma generate",
     "test": "jest",
-    "test:watch": "jest --watch",
-    "validate-deployment": "node scripts/validate-deployment.js",
-    "deploy-migrations": "node scripts/deploy-migrations.js",
-    "deploy-oauth": "node scripts/deploy-oauth.js",
-    "deploy-railway": "node scripts/deploy-railway.js",
-    "oauth-setup": "npm run validate-deployment && npm run deploy-migrations",
-    "migrate-coordinator": "node scripts/create-coordinator-migration.js"
+    "test:watch": "jest --watch"
   },
   "keywords": [
     "voice-assistant",
     "langchain",
     "ai",
     "express",
-    "railway"
+    "nodejs"
   ],
   "author": "",
   "license": "ISC",

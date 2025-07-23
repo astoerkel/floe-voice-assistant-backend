@@ -23,7 +23,7 @@ const processJob = async (job) => {
 const synthesizeSpeech = async (data) => {
   const { 
     text, 
-    voice = 'en-US-Neural2-F', 
+    voice = 'en-GB-Chirp3-HD-Sulafat', 
     speed = 1.0, 
     pitch = 0,
     format = 'mp3',

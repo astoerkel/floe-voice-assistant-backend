@@ -39,8 +39,8 @@ class TextToSpeechService {
     
     // Default voice configurations
     this.defaultVoiceConfig = {
-      languageCode: 'en-US',
-      name: 'en-US-Journey-F',
+      languageCode: 'en-GB',
+      name: 'en-GB-Chirp3-HD-Sulafat', // Sulafat voice
       ssmlGender: 'FEMALE'
     };
     
@@ -335,7 +335,7 @@ class TextToSpeechService {
         totalSyntheses: 0,
         totalCharacters: 0,
         totalAudioTime: 0,
-        topVoices: ['en-US-Journey-F'],
+        topVoices: ['en-GB-Chirp3-HD-Sulafat'],
         timeRange
       };
     } catch (error) {
@@ -361,11 +361,11 @@ class TextToSpeechService {
   getRecommendedVoice(language = 'en-US', gender = 'female') {
     const voiceMap = {
       'en-US': {
-        female: 'en-US-Journey-F',
+        female: 'en-GB-Chirp3-HD-Sulafat',
         male: 'en-US-Journey-M'
       },
       'en-GB': {
-        female: 'en-GB-Journey-F',
+        female: 'en-GB-Chirp3-HD-Sulafat', // Sulafat voice
         male: 'en-GB-Journey-M'
       },
       'es-US': {

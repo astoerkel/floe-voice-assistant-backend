@@ -85,7 +85,7 @@ class VoiceController {
       const audioResponse = await this.generateVoiceResponse(
         result.response,
         platform,
-        context.languageCode || 'en-US',
+        context.languageCode || 'en-GB',
         userId
       );
 
@@ -106,7 +106,7 @@ class VoiceController {
       // even when there are internal processing warnings or fallbacks.
       const hasValidResponse = result.response && result.response.trim().length > 0;
       const hasValidAudio = audioResponse?.audioBase64;
-      const overallSuccess = hasValidAudio || (hasValidResponse && result.success !== false);
+      const overallSuccess = hasValidAudio || hasValidResponse;
 
       // Log success determination for debugging
       logger.info('Voice response success determination:', {
@@ -215,8 +215,8 @@ class VoiceController {
       if (result.success && result.response) {
         const ttsResult = await textToSpeech.synthesizeSpeech(result.response, {
           voice: {
-            languageCode: metadata.responseLanguage || 'en-US',
-            name: metadata.voiceName || 'en-US-Journey-F'
+            languageCode: metadata.responseLanguage || 'en-GB',
+            name: metadata.voiceName || 'en-GB-Chirp3-HD-Sulafat'
           }
         });
         
@@ -237,7 +237,7 @@ class VoiceController {
       // even when there are internal processing warnings or fallbacks.
       const hasValidResponse = result.response && result.response.trim().length > 0;
       const hasValidAudio = audioResponse?.audioBase64;
-      const overallSuccess = hasValidAudio || (hasValidResponse && result.success !== false);
+      const overallSuccess = hasValidAudio || hasValidResponse;
 
       res.json({
         success: overallSuccess,
@@ -297,8 +297,8 @@ class VoiceController {
       if (generateAudio && result.success && result.response) {
         const ttsResult = await textToSpeech.synthesizeSpeech(result.response, {
           voice: {
-            languageCode: metadata.responseLanguage || 'en-US',
-            name: metadata.voiceName || 'en-US-Journey-F'
+            languageCode: metadata.responseLanguage || 'en-GB',
+            name: metadata.voiceName || 'en-GB-Chirp3-HD-Sulafat'
           }
         });
         
@@ -317,7 +317,7 @@ class VoiceController {
       // even when there are internal processing warnings or fallbacks.
       const hasValidResponse = result.response && result.response.trim().length > 0;
       const hasValidAudio = audioResponse?.audioBase64;
-      const overallSuccess = hasValidAudio || (hasValidResponse && result.success !== false);
+      const overallSuccess = hasValidAudio || hasValidResponse;
 
       res.json({
         success: overallSuccess,
@@ -392,8 +392,8 @@ class VoiceController {
 
       const result = await textToSpeech.synthesizeSpeech(text, {
         voice: {
-          languageCode: voice.languageCode || 'en-US',
-          name: voice.name || 'en-US-Journey-F',
+          languageCode: voice.languageCode || 'en-GB',
+          name: voice.name || 'en-GB-Chirp3-HD-Sulafat',
           ssmlGender: voice.ssmlGender || 'FEMALE'
         },
         audio: {
@@ -430,7 +430,7 @@ class VoiceController {
   // Get available voices
   async getAvailableVoices(req, res) {
     try {
-      const { languageCode = 'en-US' } = req.query;
+      const { languageCode = 'en-GB' } = req.query;
       
       const result = await textToSpeech.getAvailableVoices(languageCode);
       
@@ -799,7 +799,7 @@ class VoiceController {
         const audioResponse = await this.generateVoiceResponse(
           result.response,
           'ios',
-          'en-US',
+          'en-GB',
           userId
         );
 
@@ -910,13 +910,13 @@ class VoiceController {
         web: 'en-US-Neural2-F'
       },
       'en-GB': {
-        ios: 'en-GB-Neural2-A',
-        watchos: 'en-GB-Neural2-B',
-        web: 'en-GB-Neural2-A'
+        ios: 'en-GB-Chirp3-HD-Sulafat', // Sulafat voice for iOS
+        watchos: 'en-GB-Chirp3-HD-Sulafat', // Sulafat voice for watchOS  
+        web: 'en-GB-Chirp3-HD-Sulafat' // Sulafat voice for web
       }
     };
     
-    return voices[languageCode]?.[platform] || voices['en-US'][platform] || 'en-US-Neural2-F';
+    return voices[languageCode]?.[platform] || voices['en-GB'][platform] || 'en-GB-Chirp3-HD-Sulafat';
   }
   
   // Haptic feedback patterns
