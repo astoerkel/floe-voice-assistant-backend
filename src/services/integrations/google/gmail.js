@@ -93,11 +93,55 @@ class GmailIntegration {
         throw new Error('Gmail integration not found or inactive');
       }
 
+      if (!integration.accessToken) {
+        throw new Error('No access token available for Gmail integration');
+      }
+
       // Check if token needs refresh
       if (integration.expiresAt && new Date() >= integration.expiresAt) {
-        await this.refreshToken(userId, integration);
-        // Fetch updated integration
-        return await this.getAccessToken(userId);
+        logger.info(`Token expired for user ${userId}, refreshing...`);
+        try {
+          await this.refreshToken(userId, integration);
+          // Fetch updated integration after refresh
+          const refreshedIntegration = await prisma.integration.findUnique({
+            where: {
+              userId_type: {
+                userId,
+                type: this.serviceName
+              }
+            }
+          });
+          
+          if (!refreshedIntegration || !refreshedIntegration.accessToken) {
+            throw new Error('Failed to refresh token');
+          }
+          
+          this.oauth2Client.setCredentials({
+            access_token: refreshedIntegration.accessToken,
+            refresh_token: refreshedIntegration.refreshToken
+          });
+          
+          return refreshedIntegration.accessToken;
+        } catch (refreshError) {
+          logger.error('Token refresh failed:', refreshError);
+          // Mark integration as inactive if refresh fails
+          await prisma.integration.update({
+            where: {
+              userId_type: {
+                userId,
+                type: this.serviceName
+              }
+            },
+            data: {
+              isActive: false,
+              syncErrors: {
+                lastError: refreshError.message,
+                timestamp: new Date().toISOString()
+              }
+            }
+          });
+          throw new Error('Gmail integration token expired and could not be refreshed. Please re-authenticate.');
+        }
       }
 
       this.oauth2Client.setCredentials({
@@ -165,28 +209,38 @@ class GmailIntegration {
         labelIds: labelIds
       });
 
-      if (!response.data.messages) {
+      if (!response.data.messages || response.data.messages.length === 0) {
+        logger.info(`No emails found for user ${userId} with query: ${searchQuery.trim()}`);
         return [];
       }
 
-      // Get detailed information for each message
-      const emails = await Promise.all(
-        response.data.messages.map(async (message) => {
+      // Get detailed information for each message with proper error handling
+      const emails = [];
+      for (const message of response.data.messages) {
+        try {
           const messageResponse = await this.gmail.users.messages.get({
             userId: 'me',
             id: message.id,
             format: 'full'
           });
 
-          return this.parseEmailMessage(messageResponse.data);
-        })
-      );
+          const parsedEmail = this.parseEmailMessage(messageResponse.data);
+          emails.push(parsedEmail);
+        } catch (messageError) {
+          logger.warn(`Failed to get message ${message.id}:`, messageError.message);
+          // Continue with other messages instead of failing completely
+          continue;
+        }
+      }
 
       logger.info(`Retrieved ${emails.length} emails for user ${userId}`);
       return emails;
     } catch (error) {
       logger.error('Failed to get emails:', error);
-      throw error;
+      if (error.message.includes('token') || error.message.includes('authentication')) {
+        throw new Error('Gmail authentication failed. Please reconnect your Gmail account.');
+      }
+      throw new Error(`Failed to retrieve emails: ${error.message}`);
     }
   }
 
@@ -370,44 +424,103 @@ class GmailIntegration {
   }
 
   parseEmailMessage(message) {
-    const headers = message.payload.headers;
-    const getHeader = (name) => {
-      const header = headers.find(h => h.name.toLowerCase() === name.toLowerCase());
-      return header ? header.value : null;
-    };
+    try {
+      const headers = message.payload.headers || [];
+      const getHeader = (name) => {
+        const header = headers.find(h => h.name && h.name.toLowerCase() === name.toLowerCase());
+        return header ? header.value : null;
+      };
 
-    // Extract email body
-    let body = '';
-    if (message.payload.body && message.payload.body.data) {
-      body = Buffer.from(message.payload.body.data, 'base64').toString();
-    } else if (message.payload.parts) {
-      // Handle multipart messages
-      for (const part of message.payload.parts) {
-        if (part.mimeType === 'text/plain' && part.body && part.body.data) {
-          body = Buffer.from(part.body.data, 'base64').toString();
-          break;
+      // Extract email body with proper error handling
+      let body = '';
+      try {
+        if (message.payload.body && message.payload.body.data) {
+          // Handle URL-safe base64 encoding used by Gmail API
+          const base64Data = message.payload.body.data
+            .replace(/-/g, '+')
+            .replace(/_/g, '/');
+          body = Buffer.from(base64Data, 'base64').toString('utf8');
+        } else if (message.payload.parts && Array.isArray(message.payload.parts)) {
+          // Handle multipart messages
+          for (const part of message.payload.parts) {
+            if (part.mimeType === 'text/plain' && part.body && part.body.data) {
+              const base64Data = part.body.data
+                .replace(/-/g, '+')
+                .replace(/_/g, '/');
+              body = Buffer.from(base64Data, 'base64').toString('utf8');
+              break;
+            }
+            // Also check for HTML if no plain text found
+            if (!body && part.mimeType === 'text/html' && part.body && part.body.data) {
+              const base64Data = part.body.data
+                .replace(/-/g, '+')
+                .replace(/_/g, '/');
+              // Extract text content from HTML (basic implementation)
+              const htmlBody = Buffer.from(base64Data, 'base64').toString('utf8');
+              body = htmlBody.replace(/<[^>]*>/g, '').trim();
+            }
+          }
         }
+      } catch (bodyError) {
+        logger.warn('Failed to decode email body:', bodyError.message);
+        body = message.snippet || '(Body could not be decoded)';
       }
-    }
 
-    return {
-      id: message.id,
-      threadId: message.threadId,
-      subject: getHeader('Subject'),
-      sender: getHeader('From'),
-      recipient: getHeader('To'),
-      cc: getHeader('Cc'),
-      bcc: getHeader('Bcc'),
-      body: body,
-      timestamp: new Date(parseInt(message.internalDate)),
-      messageId: getHeader('Message-ID'),
-      references: getHeader('References'),
-      inReplyTo: getHeader('In-Reply-To'),
-      isRead: !message.labelIds?.includes('UNREAD'),
-      isImportant: message.labelIds?.includes('IMPORTANT'),
-      labels: message.labelIds || [],
-      snippet: message.snippet
-    };
+      // Ensure timestamp is valid
+      let timestamp = new Date();
+      try {
+        if (message.internalDate) {
+          timestamp = new Date(parseInt(message.internalDate));
+          // Validate timestamp
+          if (isNaN(timestamp.getTime()) || timestamp.getTime() < 0) {
+            timestamp = new Date();
+          }
+        }
+      } catch (timestampError) {
+        logger.warn('Invalid timestamp in email:', timestampError.message);
+        timestamp = new Date();
+      }
+
+      return {
+        id: message.id || 'unknown',
+        threadId: message.threadId || 'unknown',
+        subject: getHeader('Subject') || '(No Subject)',
+        sender: getHeader('From') || 'Unknown Sender',
+        recipient: getHeader('To') || '',
+        cc: getHeader('Cc') || '',
+        bcc: getHeader('Bcc') || '',
+        body: body || message.snippet || '',
+        timestamp: timestamp,
+        messageId: getHeader('Message-ID') || '',
+        references: getHeader('References') || '',
+        inReplyTo: getHeader('In-Reply-To') || '',
+        isRead: !message.labelIds?.includes('UNREAD'),
+        isImportant: message.labelIds?.includes('IMPORTANT'),
+        labels: message.labelIds || [],
+        snippet: message.snippet || ''
+      };
+    } catch (error) {
+      logger.error('Failed to parse email message:', error);
+      // Return a safe fallback object
+      return {
+        id: message.id || 'error',
+        threadId: message.threadId || 'error',
+        subject: '(Error parsing email)',
+        sender: 'Unknown',
+        recipient: '',
+        cc: '',
+        bcc: '',
+        body: message.snippet || '(Error decoding email content)',
+        timestamp: new Date(),
+        messageId: '',
+        references: '',
+        inReplyTo: '',
+        isRead: true,
+        isImportant: false,
+        labels: [],
+        snippet: message.snippet || '(Error)'
+      };
+    }
   }
 
   createEmailMessage(emailData) {

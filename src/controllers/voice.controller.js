@@ -114,37 +114,53 @@ class VoiceController {
         hasValidResponse,
         hasValidAudio,
         overallSuccess,
-        userId
+        userId,
+        responseLength: result.response?.length || 0,
+        audioDataSize: audioResponse?.audioBase64?.length || 0
       });
 
+      // Log the exact response format being sent to iOS for debugging
+      logger.info('Sending response to iOS:', {
+        success: overallSuccess,
+        textLength: result.response?.length || 0,
+        hasAudioBase64: !!audioResponse?.audioBase64,
+        audioBase64Length: audioResponse?.audioBase64?.length || 0
+      });
+
+      // Return format expected by iOS app: { success: boolean, text: string, audioBase64: string }
       res.json({
         success: overallSuccess,
+        text: result.response, // The actual response text (not nested)
+        audioBase64: audioResponse?.audioBase64 || null, // Direct audio data (not nested)
+        // Additional fields for debugging and features
         processingTime,
         transcriptionMethod: 'apple_speech',
-        text: text,
         intent: result.intent,
         confidence: result.confidence,
         agentUsed: result.agentUsed || result.agent,
         executionTime: result.executionTime,
-        response: {
-          text: result.response,
-          audioUrl: audioResponse?.audioBase64 ? `data:audio/mp3;base64,${audioResponse.audioBase64}` : null,
-          hapticPattern: this.getHapticPattern(result.intent || result.action?.type)
-        },
-        audioResponse,
         action: result.action,
         actions: result.actions || [],
         suggestions: result.suggestions || [],
         sessionId: enhancedContext.sessionId,
         usage: result.usage || {},
         coordinatorUsed: result.agentUsed ? 'langchain' : 'legacy',
-        // Include coordinator success for debugging
-        coordinatorSuccess: result.success
+        coordinatorSuccess: result.success,
+        // Legacy format for backward compatibility (but iOS should use the flat fields above)
+        response: {
+          text: result.response,
+          audioUrl: audioResponse?.audioBase64 ? `data:audio/mp3;base64,${audioResponse.audioBase64}` : null,
+          hapticPattern: this.getHapticPattern(result.intent || result.action?.type)
+        },
+        audioResponse
       });
       
     } catch (error) {
       logger.error('Text processing error:', error);
       res.status(500).json({
+        success: false,
+        text: "I'm sorry, I encountered an error processing your request. Please try again.",
+        audioBase64: null,
         error: error.message,
         processingTime: Date.now() - startTime,
         fallbackSuggestion: 'Try using audio upload endpoint'
@@ -239,8 +255,12 @@ class VoiceController {
       const hasValidAudio = audioResponse?.audioBase64;
       const overallSuccess = hasValidAudio || hasValidResponse;
 
+      // Return format expected by iOS app: { success: boolean, text: string, audioBase64: string }
       res.json({
         success: overallSuccess,
+        text: result.response, // The actual response text (not nested)
+        audioBase64: audioResponse?.audioBase64 || null, // Direct audio data (not nested)
+        // Additional fields for debugging and features
         processingTime: totalProcessingTime,
         transcriptionTime,
         transcriptionMethod: 'whisper',
@@ -249,8 +269,6 @@ class VoiceController {
           confidence: transcriptionResult.confidence,
           language: transcriptionResult.language
         },
-        response: result.response,
-        audioResponse,
         intent: result.intent,
         confidence: result.confidence,
         agentUsed: result.agentUsed,
@@ -258,15 +276,20 @@ class VoiceController {
         actions: result.actions || [],
         suggestions: result.suggestions || [],
         sessionId,
+        coordinatorSuccess: result.success,
+        // Legacy format for backward compatibility
+        response: result.response,
+        audioResponse,
         updates: {
           hapticPattern: this.getHapticPattern(result.intent)
-        },
-        // Include coordinator success for debugging
-        coordinatorSuccess: result.success
+        }
       });
     } catch (error) {
       logger.error('Voice audio processing failed:', error);
       res.status(500).json({ 
+        success: false,
+        text: "I'm sorry, I had trouble processing your audio. Please try again.",
+        audioBase64: null,
         error: 'Voice audio processing failed',
         message: error.message 
       });
@@ -319,10 +342,12 @@ class VoiceController {
       const hasValidAudio = audioResponse?.audioBase64;
       const overallSuccess = hasValidAudio || hasValidResponse;
 
+      // Return format expected by iOS app: { success: boolean, text: string, audioBase64: string }
       res.json({
         success: overallSuccess,
-        response: result.response,
-        audioResponse,
+        text: result.response, // The actual response text (not nested)
+        audioBase64: audioResponse?.audioBase64 || null, // Direct audio data (not nested)
+        // Additional fields for debugging and features
         intent: result.intent,
         confidence: result.confidence,
         agentUsed: result.agentUsed,
@@ -330,12 +355,17 @@ class VoiceController {
         actions: result.actions || [],
         suggestions: result.suggestions || [],
         sessionId,
-        // Include coordinator success for debugging
-        coordinatorSuccess: result.success
+        coordinatorSuccess: result.success,
+        // Legacy format for backward compatibility
+        response: result.response,
+        audioResponse
       });
     } catch (error) {
       logger.error('Voice processing failed:', error);
       res.status(500).json({ 
+        success: false,
+        text: "I'm sorry, I encountered an error processing your request. Please try again.",
+        audioBase64: null,
         error: 'Voice processing failed',
         message: error.message 
       });
@@ -808,18 +838,21 @@ class VoiceController {
         const hasValidAudio = audioResponse?.audioBase64;
         const overallSuccess = hasValidAudio || (hasValidResponse && result.success !== false);
 
+        // Return format expected by iOS app: { success: boolean, text: string, audioBase64: string }
         res.json({
           success: overallSuccess,
           final: true,
-          text: text,
+          text: result.response, // The actual response text (not nested)
+          audioBase64: audioResponse?.audioBase64 || null, // Direct audio data (not nested)
+          // Additional fields for debugging and features
           intent: result.intent,
-          response: result.response,
-          audioResponse,
+          coordinatorSuccess: result.success,
           updates: {
             hapticPattern: this.getHapticPattern(result.intent)
           },
-          // Include coordinator success for debugging
-          coordinatorSuccess: result.success
+          // Legacy format for backward compatibility
+          response: result.response,
+          audioResponse
         });
       } else {
         // Handle partial results
@@ -831,7 +864,12 @@ class VoiceController {
       }
     } catch (error) {
       logger.error('Stream process failed:', error);
-      res.status(500).json({ error: 'Stream process failed' });
+      res.status(500).json({ 
+        success: false,
+        text: "I'm sorry, I had trouble with the streaming request. Please try again.",
+        audioBase64: null,
+        error: 'Stream process failed' 
+      });
     }
   }
 

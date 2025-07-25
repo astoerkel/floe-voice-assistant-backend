@@ -114,11 +114,12 @@ class IntegrationsController {
     // Email endpoints
     async getEmails(req, res) {
         try {
-            const { q, maxResults = 10 } = req.query;
+            const { q, maxResults = 10, includeSpamTrash = false } = req.query;
             
-            const emails = await this.gmailService.listMessages(req.user.id, {
-                q,
-                maxResults: parseInt(maxResults)
+            const emails = await this.gmailService.getEmails(req.user.id, {
+                query: q || '',
+                limit: parseInt(maxResults),
+                includeSpamTrash: includeSpamTrash === 'true'
             });
             
             res.json({
@@ -138,7 +139,7 @@ class IntegrationsController {
         try {
             const { emailId } = req.params;
             
-            const email = await this.gmailService.getMessage(req.user.id, emailId);
+            const email = await this.gmailService.getEmail(req.user.id, emailId);
             
             res.json({
                 success: true,

@@ -1,5 +1,5 @@
-// Legacy imports (keeping for backward compatibility)
-const { getLangChainService } = require('../ai/langchain-fixed');
+// Legacy imports (keeping for backward compatibility)  
+const langChainService = require('../ai/langchain');
 const intentClassifier = require('../ai/intentClassifier');
 const legacyCalendarAgent = require('./calendarAgent');
 const legacyEmailAgent = require('./emailAgent');
@@ -17,7 +17,7 @@ class CoordinatorAgent {
     this.agentName = 'coordinator';
     this.specializedAgents = new Map();
     this.conversationCache = new Map();
-    this.langChainService = getLangChainService();
+    this.langChainService = langChainService;
     
     // Initialize new LangChain coordinator
     this.voiceAssistantCoordinator = new VoiceAssistantCoordinator();

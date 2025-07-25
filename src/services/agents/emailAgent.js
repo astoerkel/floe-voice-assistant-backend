@@ -1,10 +1,12 @@
 const { Tool } = require('langchain/tools');
 const { prisma } = require('../../config/database');
 const logger = require('../../utils/logger');
+const GmailIntegration = require('../integrations/google/gmail');
 
 class EmailAgent {
   constructor() {
     this.agentName = 'email';
+    this.gmailService = new GmailIntegration();
     this.tools = this.createTools();
   }
 
@@ -327,79 +329,73 @@ class EmailAgent {
   // Email data management methods
   async getEmails(userId, filter = 'all', limit = 10) {
     try {
-      // For now, return mock data. In a real implementation, this would:
-      // 1. Check user's Gmail integration
-      // 2. Fetch emails from Gmail API
-      // 3. Apply filters and return formatted emails
-      
-      const mockEmails = [
-        {
-          id: 'email1',
-          subject: 'Team Meeting Tomorrow',
-          sender: 'john@company.com',
-          senderName: 'John Smith',
-          body: 'Hi team, reminder about our meeting tomorrow at 2 PM in the conference room.',
-          timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
-          isRead: false,
-          isImportant: true
-        },
-        {
-          id: 'email2',
-          subject: 'Project Update',
-          sender: 'jane@company.com',
-          senderName: 'Jane Doe',
-          body: 'Here is the latest update on the project status...',
-          timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000), // 4 hours ago
-          isRead: false,
-          isImportant: false
-        },
-        {
-          id: 'email3',
-          subject: 'Weekly Report',
-          sender: 'manager@company.com',
-          senderName: 'Manager',
-          body: 'Please find the weekly report attached.',
-          timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000), // 1 day ago
-          isRead: true,
-          isImportant: false
-        }
-      ];
-      
-      let filteredEmails = mockEmails;
-      
+      // Check if Gmail integration is active
+      const isActive = await this.gmailService.isIntegrationActive(userId);
+      if (!isActive) {
+        logger.warn(`Gmail integration not active for user ${userId}`);
+        return [];
+      }
+
+      let query = '';
       switch (filter) {
         case 'unread':
-          filteredEmails = mockEmails.filter(email => !email.isRead);
+          query = 'is:unread';
           break;
         case 'important':
-          filteredEmails = mockEmails.filter(email => email.isImportant);
+          query = 'is:important';
           break;
         case 'recent':
-          filteredEmails = mockEmails.filter(email => 
-            email.timestamp > new Date(Date.now() - 6 * 60 * 60 * 1000) // Last 6 hours
-          );
+          // Get emails from last 6 hours
+          const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
+          const dateFilter = sixHoursAgo.toISOString().split('T')[0].replace(/-/g, '/');
+          query = `after:${dateFilter}`;
           break;
         default:
-          filteredEmails = mockEmails;
+          query = '';
       }
       
-      return filteredEmails.slice(0, limit);
+      const emails = await this.gmailService.getEmails(userId, {
+        query,
+        limit,
+        includeSpamTrash: false
+      });
+      
+      // Transform Gmail format to agent format for backwards compatibility
+      return emails.map(email => ({
+        id: email.id,
+        subject: email.subject || '(No Subject)',
+        sender: email.sender || 'Unknown Sender',
+        senderName: this.extractSenderName(email.sender),
+        body: email.body || email.snippet || '',
+        timestamp: email.timestamp,
+        isRead: email.isRead,
+        isImportant: email.isImportant,
+        snippet: email.snippet
+      }));
     } catch (error) {
       logger.error('Get emails failed:', error);
+      // Return empty array on error instead of mock data
       return [];
     }
   }
 
   async sendEmail(emailData) {
     try {
-      // For now, return mock data. In a real implementation, this would:
-      // 1. Validate email data
-      // 2. Send email via Gmail API
-      // 3. Store sent email reference
-      // 4. Return confirmation
+      // Check if Gmail integration is active
+      const isActive = await this.gmailService.isIntegrationActive(emailData.userId);
+      if (!isActive) {
+        throw new Error('Gmail integration not active for user');
+      }
+
+      const result = await this.gmailService.sendEmail(emailData.userId, {
+        to: emailData.recipient,
+        subject: emailData.subject,
+        body: emailData.body || 'Sent via voice assistant'
+      });
       
-      const mockEmail = {
-        id: `email_${Date.now()}`,
+      logger.info('Email sent via Gmail API:', result);
+      return {
+        id: result.id,
         recipient: emailData.recipient,
         subject: emailData.subject,
         body: emailData.body || 'Sent via voice assistant',
@@ -407,39 +403,48 @@ class EmailAgent {
         userId: emailData.userId,
         status: 'sent'
       };
-      
-      logger.info('Email sent:', mockEmail);
-      return mockEmail;
     } catch (error) {
       logger.error('Send email failed:', error);
       throw error;
     }
   }
 
-  async replyToEmail(emailId, replyText) {
+  async replyToEmail(userId, emailId, replyText) {
     try {
-      // Mock implementation
-      const mockReply = {
-        id: `reply_${Date.now()}`,
+      // Check if Gmail integration is active
+      const isActive = await this.gmailService.isIntegrationActive(userId);
+      if (!isActive) {
+        throw new Error('Gmail integration not active for user');
+      }
+
+      const result = await this.gmailService.replyToEmail(userId, emailId, replyText);
+      
+      logger.info('Email reply sent via Gmail API:', result);
+      return {
+        id: result.id,
         originalEmailId: emailId,
         body: replyText,
         timestamp: new Date(),
         status: 'sent'
       };
-      
-      logger.info('Email reply sent:', mockReply);
-      return mockReply;
     } catch (error) {
       logger.error('Reply to email failed:', error);
       throw error;
     }
   }
 
-  async markEmailRead(emailId) {
+  async markEmailRead(userId, emailId) {
     try {
-      // Mock implementation
-      logger.info('Email marked as read:', emailId);
-      return { id: emailId, isRead: true };
+      // Check if Gmail integration is active
+      const isActive = await this.gmailService.isIntegrationActive(userId);
+      if (!isActive) {
+        throw new Error('Gmail integration not active for user');
+      }
+
+      const result = await this.gmailService.markAsRead(userId, emailId);
+      
+      logger.info('Email marked as read via Gmail API:', emailId);
+      return { id: emailId, isRead: true, success: result.success };
     } catch (error) {
       logger.error('Mark email read failed:', error);
       throw error;
@@ -448,16 +453,27 @@ class EmailAgent {
 
   async searchEmails(userId, query, limit = 10) {
     try {
-      // Mock implementation - search in mock emails
-      const mockEmails = await this.getEmails(userId, 'all', 50);
+      // Check if Gmail integration is active
+      const isActive = await this.gmailService.isIntegrationActive(userId);
+      if (!isActive) {
+        logger.warn(`Gmail integration not active for user ${userId}`);
+        return [];
+      }
+
+      const emails = await this.gmailService.searchEmails(userId, query, limit);
       
-      const searchResults = mockEmails.filter(email => 
-        email.subject.toLowerCase().includes(query.toLowerCase()) ||
-        email.body.toLowerCase().includes(query.toLowerCase()) ||
-        email.senderName.toLowerCase().includes(query.toLowerCase())
-      );
-      
-      return searchResults.slice(0, limit);
+      // Transform Gmail format to agent format for backwards compatibility
+      return emails.map(email => ({
+        id: email.id,
+        subject: email.subject || '(No Subject)',
+        sender: email.sender || 'Unknown Sender',
+        senderName: this.extractSenderName(email.sender),
+        body: email.body || email.snippet || '',
+        timestamp: email.timestamp,
+        isRead: email.isRead,
+        isImportant: email.isImportant,
+        snippet: email.snippet
+      }));
     } catch (error) {
       logger.error('Search emails failed:', error);
       return [];
@@ -465,6 +481,19 @@ class EmailAgent {
   }
 
   // Utility methods
+  extractSenderName(senderString) {
+    if (!senderString) return 'Unknown Sender';
+    
+    // Extract name from "Name <email@domain.com>" format
+    const nameMatch = senderString.match(/^([^<]+)<.+>$/);
+    if (nameMatch) {
+      return nameMatch[1].trim();
+    }
+    
+    // If no name part, return email address
+    return senderString;
+  }
+
   parseEmailDetails(input) {
     // Simple parsing - in a real implementation, this would use NLP
     const emailDetails = {
