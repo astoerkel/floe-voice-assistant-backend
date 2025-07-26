@@ -10,7 +10,7 @@ module.exports = {
       env_file: '.env',
       env: {
         NODE_ENV: 'production',
-        PORT: 8080
+        PORT: 3000
       },
       error_file: '/opt/voice-assistant/logs/api-error.log',
       out_file: '/opt/voice-assistant/logs/api-out.log',

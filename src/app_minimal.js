@@ -24,19 +24,10 @@ const { checkUsageLimit } = require('./middleware/usageLimiter');
 const { connectRedis } = require('./config/redis');
 const { connectDatabase } = require('./config/database');
 
-// Import routes
+// Import essential routes only
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/user');
-const adminRoutes = require('./routes/admin');
-const analyticsRoutes = require('./routes/analytics');
-const subscriptionsRoutes = require('./routes/subscriptions');
 const voiceRoutes = require('./routes/voice');
-const calendarRoutes = require('./routes/calendar');
-const emailRoutes = require('./routes/email');
-const tasksRoutes = require('./routes/tasks');
-const integrationsRoutes = require('./routes/integrations');
-const syncRoutes = require('./routes/sync');
-const queueRoutes = require('./routes/queue');
 const oauthRoutes = require('./routes/oauth');
 const diagnosticsRoutes = require('./routes/diagnostics');
 
@@ -50,50 +41,36 @@ if (process.env.NODE_ENV === 'production') {
   app.set('trust proxy', 1);
 }
 
-const server = createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: true, // Allow all origins for mobile app connections
-    credentials: true
-  }
-});
-
-// Initialize connections asynchronously to not block server startup
-Promise.all([
-  connectDatabase().catch(err => {
-    logger.error('Database connection failed:', err);
-    console.log('Continuing without database connection');
-  }),
-  connectRedis().catch(err => {
-    logger.error('Redis connection failed:', err);
-    console.log('Continuing without Redis connection');
-  })
-]).then(() => {
-  logger.info('All connections initialized');
-}).catch(err => {
-  logger.error('Connection initialization error:', err);
-});
-
 // Security middleware
 app.use(helmet({
-  contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https:"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:"],
+      connectSrc: ["'self'", "wss:", "ws:"],
+    },
+  },
 }));
 
 // CORS configuration
+const corsOrigins = process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['http://localhost:3000'];
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' ? false : true,
-  credentials: true
+  origin: corsOrigins,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key']
 }));
 
 // Rate limiting
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
-  message: 'Too many requests from this IP',
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
   standardHeaders: true,
   legacyHeaders: false,
 });
-app.use('/api/', limiter);
+app.use(limiter);
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
@@ -121,19 +98,10 @@ app.get('/public/health', (req, res) => {
   });
 });
 
-// API routes (with authentication)
+// API routes (essential only)
 app.use('/api/auth', authRoutes); // Auth routes handle their own authentication
-app.use('/api/user', userRoutes); // User routes include JWT auth internally
-app.use('/api/admin', authenticateApiKey, adminRoutes); // Admin routes include JWT auth and role check internally
-app.use('/api/analytics', authenticateApiKey, analyticsRoutes); // Analytics routes include JWT auth internally
-app.use('/api/subscriptions', authenticateApiKey, subscriptionsRoutes); // Subscriptions routes include JWT auth internally
+app.use('/api/user', authenticateApiKey, userRoutes); // User routes include JWT auth internally
 app.use('/api/voice', authenticateApiKey, jwtAuth, checkUsageLimit, voiceRoutes);
-app.use('/api/calendar', authenticateApiKey, calendarRoutes);
-app.use('/api/email', authenticateApiKey, emailRoutes);
-app.use('/api/tasks', authenticateApiKey, tasksRoutes);
-app.use('/api/integrations', authenticateApiKey, integrationsRoutes);
-app.use('/api/sync', authenticateApiKey, syncRoutes);
-app.use('/api/queue', authenticateApiKey, queueRoutes);
 app.use('/api/oauth', oauthRoutes); // OAuth routes handle their own authentication
 app.use('/api/diagnostics', diagnosticsRoutes); // Diagnostics routes (no auth for debugging)
 
@@ -147,24 +115,49 @@ if (fs.existsSync(audioPath)) {
   logger.warn(`Audio directory not found: ${audioPath}`);
 }
 
-// Initialize WebSocket (with error handling)
-try {
-  initializeWebSocket(io);
-  logger.info('WebSocket initialized successfully');
-} catch (error) {
-  logger.error('WebSocket initialization failed:', error);
-  // Continue without WebSocket - REST API will still work
-}
-
-// Error handling middleware (should be last)
-app.use(errorHandler);
-
-// 404 handler
+// 404 handler for unmatched routes
 app.use('*', (req, res) => {
+  logger.warn(`404 - Route not found: ${req.method} ${req.originalUrl}`);
   res.status(404).json({ error: 'Route not found' });
 });
 
+// Error handling middleware (must be last)
+app.use(errorHandler);
+
+// Initialize database and Redis connections
+async function initialize() {
+  try {
+    // Connect to database
+    await connectDatabase();
+    logger.info('Database connected successfully');
+
+    // Connect to Redis
+    await connectRedis();
+    logger.info('Redis connected successfully');
+
+  } catch (error) {
+    logger.error('Failed to initialize connections:', error);
+    if (process.env.NODE_ENV === 'production') {
+      process.exit(1);
+    }
+  }
+}
+
+// Start server
 const PORT = process.env.PORT || 3000;
+const server = createServer(app);
+
+// Initialize WebSocket
+initializeWebSocket(server);
+
+server.listen(PORT, '0.0.0.0', async () => {
+  logger.info(`🚀 Voice Assistant Backend server running on port ${PORT}`);
+  logger.info(`🌍 Environment: ${process.env.NODE_ENV}`);
+  logger.info(`🔗 CORS origins: ${corsOrigins.join(', ')}`);
+  
+  // Initialize connections
+  await initialize();
+});
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
@@ -181,12 +174,6 @@ process.on('SIGINT', () => {
     logger.info('Process terminated');
     process.exit(0);
   });
-});
-
-server.listen(PORT, '0.0.0.0', () => {
-  logger.info(`Voice Assistant Backend running on port ${PORT}`);
-  logger.info(`Environment: ${process.env.NODE_ENV}`);
-  console.log(`Server successfully listening on 0.0.0.0:${PORT}`);
 });
 
 module.exports = app;

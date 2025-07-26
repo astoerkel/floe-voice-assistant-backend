@@ -44,7 +44,7 @@ class UserController {
               name: true,
               type: true,
               active: true,
-              lastUpdated: true
+              updatedAt: true
             },
             where: { active: true }
           },

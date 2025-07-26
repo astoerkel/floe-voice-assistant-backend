@@ -1,5 +1,4 @@
 // Legacy imports (keeping for backward compatibility)  
-const langChainService = require('../ai/langchain');
 const intentClassifier = require('../ai/intentClassifier');
 const legacyCalendarAgent = require('./calendarAgent');
 const legacyEmailAgent = require('./emailAgent');
@@ -17,7 +16,6 @@ class CoordinatorAgent {
     this.agentName = 'coordinator';
     this.specializedAgents = new Map();
     this.conversationCache = new Map();
-    this.langChainService = langChainService;
     
     // Initialize new LangChain coordinator
     this.voiceAssistantCoordinator = new VoiceAssistantCoordinator();
@@ -215,23 +213,13 @@ class CoordinatorAgent {
 
   async handleGeneralCommand(userId, input, context) {
     try {
-      // Check if LangChain service is available
-      if (!this.langChainService.isAvailable()) {
-        logger.warn('LangChain service not available, using fallback');
-        return {
-          text: this.generateFallbackResponse(input),
-          actions: [],
-          suggestions: this.generateSuggestions(input)
-        };
-      }
-      
-      // Use LangChain service for general processing
-      const result = await this.langChainService.processVoiceCommand(userId, input, context);
+      // Use the new VoiceAssistantCoordinator for general processing
+      const result = await this.voiceAssistantCoordinator.processRequest(userId, input, context);
       
       if (result.success) {
         return {
           text: result.response,
-          actions: [],
+          actions: result.actions || [],
           suggestions: this.generateSuggestions(input)
         };
       } else {
@@ -372,10 +360,8 @@ class CoordinatorAgent {
         data: { isActive: false }
       });
 
-      // Clear memory from LangChain service
-      if (this.langChainService.isAvailable()) {
-        this.langChainService.clearUserMemory(userId);
-      }
+      // Clear memory from VoiceAssistantCoordinator if needed
+      // The new coordinator manages its own conversation context
       
       // Clear cache
       this.conversationCache.delete(userId);

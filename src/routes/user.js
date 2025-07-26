@@ -10,28 +10,6 @@ const {
 } = require('../controllers/user.controller');
 const { authenticateJWT } = require('../middleware/jwtAuth');
 
-/**
- * @route   GET /api/user/test
- * @desc    Test endpoint without auth for debugging
- * @access  Public
- */
-router.get('/test', (req, res) => {
-  res.json({
-    success: true,
-    message: 'User API is working',
-    timestamp: new Date().toISOString(),
-    user: {
-      id: 'test-user-123',
-      email: 'test@example.com', 
-      name: 'Test User',
-      subscriptionTier: 'free',
-      subscriptionStatus: 'active',
-      monthlyUsageCount: 15,
-      monthlyUsageLimit: 100,
-      isActive: true
-    }
-  });
-});
 
 /**
  * @route   GET /api/user/profile

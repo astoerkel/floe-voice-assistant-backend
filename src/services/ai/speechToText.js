@@ -6,13 +6,31 @@ const logger = require('../../utils/logger');
 
 class SpeechToTextService {
   constructor() {
-    this.openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY
-    });
+    // Only initialize OpenAI if API key is available
+    if (process.env.OPENAI_API_KEY) {
+      this.openai = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY
+      });
+    } else {
+      logger.info('OpenAI API key not provided - Whisper transcription will be disabled');
+      this.openai = null;
+    }
   }
 
   async transcribeAudio(audioBuffer, options = {}) {
     try {
+      // Check if OpenAI is available
+      if (!this.openai) {
+        logger.warn('OpenAI not available - cannot transcribe audio');
+        return {
+          text: '',
+          confidence: 0,
+          processingTime: 0,
+          source: 'unavailable',
+          error: 'OpenAI Whisper not configured'
+        };
+      }
+
       const startTime = Date.now();
       
       // Default options
