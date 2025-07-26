@@ -202,12 +202,18 @@ class GmailIntegration {
         searchQuery += ' -in:spam -in:trash';
       }
 
-      const response = await this.gmail.users.messages.list({
+      // Build request parameters, only include labelIds if it's not null/undefined
+      const requestParams = {
         userId: 'me',
         q: searchQuery.trim(),
-        maxResults: limit,
-        labelIds: labelIds
-      });
+        maxResults: limit
+      };
+      
+      if (labelIds && labelIds.length > 0) {
+        requestParams.labelIds = labelIds;
+      }
+
+      const response = await this.gmail.users.messages.list(requestParams);
 
       if (!response.data.messages || response.data.messages.length === 0) {
         logger.info(`No emails found for user ${userId} with query: ${searchQuery.trim()}`);
