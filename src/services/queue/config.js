@@ -19,10 +19,10 @@ const defaultQueueConfig = {
   }
 };
 
-// Redis connection for BullMQ - disable if URL contains localhost or railway internal
+// Redis connection for BullMQ - disable if URL contains localhost or internal networks
 const shouldUseRedis = process.env.REDIS_URL && 
   !process.env.REDIS_URL.includes('localhost') && 
-  !process.env.REDIS_URL.includes('railway.internal') &&
+  !process.env.REDIS_URL.includes('127.0.0.1') &&
   !process.env.DISABLE_REDIS;
 
 const connection = shouldUseRedis ? process.env.REDIS_URL : null;

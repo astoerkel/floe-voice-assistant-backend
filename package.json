@@ -10,11 +10,18 @@
     "start": "node start.js",
     "dev": "nodemon src/app.js",
     "build": "npx prisma generate",
-    "worker": "node src/services/queue/worker.js",
+    "worker": "node src/worker.js",
+    "worker:dev": "nodemon src/worker.js",
     "migrate": "npx prisma migrate deploy",
     "postinstall": "npx prisma generate",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "deploy": "./deploy.sh",
+    "deploy:quick": "./deploy.sh --no-install",
+    "deploy:logs": "./deploy.sh --logs",
+    "hetzner:status": "ssh hetzner 'pm2 status'",
+    "hetzner:logs": "ssh hetzner 'pm2 logs'",
+    "hetzner:restart": "ssh hetzner 'pm2 restart all'"
   },
   "keywords": [
     "voice-assistant",
@@ -50,6 +57,7 @@
     "langchain": "^0.1.0",
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
+    "node-cron": "^4.2.1",
     "openai": "^4.24.7",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",

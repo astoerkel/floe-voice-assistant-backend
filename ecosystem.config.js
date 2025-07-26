@@ -12,9 +12,9 @@ module.exports = {
         NODE_ENV: 'production',
         PORT: 8080
       },
-      error_file: '/opt/voice-assistant/logs/error.log',
-      out_file: '/opt/voice-assistant/logs/out.log',
-      log_file: '/opt/voice-assistant/logs/combined.log',
+      error_file: '/opt/voice-assistant/logs/api-error.log',
+      out_file: '/opt/voice-assistant/logs/api-out.log',
+      log_file: '/opt/voice-assistant/logs/api-combined.log',
       time: true,
       merge_logs: true,
       restart_delay: 3000, // 3 second delay between restarts
@@ -23,6 +23,27 @@ module.exports = {
       kill_timeout: 5000,
       wait_ready: true,
       listen_timeout: 8000
+    },
+    {
+      name: 'voice-assistant-worker',
+      script: 'src/worker.js',
+      instances: 1,
+      exec_mode: 'fork',
+      watch: false,
+      max_memory_restart: '300M',
+      env_file: '.env',
+      env: {
+        NODE_ENV: 'production'
+      },
+      error_file: '/opt/voice-assistant/logs/worker-error.log',
+      out_file: '/opt/voice-assistant/logs/worker-out.log',
+      log_file: '/opt/voice-assistant/logs/worker-combined.log',
+      time: true,
+      merge_logs: true,
+      restart_delay: 5000, // 5 second delay for worker restarts
+      max_restarts: 3,
+      min_uptime: '60s', // Worker needs more time to stabilize
+      kill_timeout: 10000
     }
   ]
 };

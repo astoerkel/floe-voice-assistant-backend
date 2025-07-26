@@ -31,10 +31,19 @@ class EmailAgent {
    */
   async handleRequest(userId, userInput, context, systemPrompt) {
     try {
-      logger.info(`EmailAgent handling request for user ${userId}: "${userInput}"`);
+      logger.info(`⚡ LangChain EmailAgent handling request for user ${userId}: "${userInput}"`);
+      logger.info(`⚡ LangChain EmailAgent context received: ${JSON.stringify(context, null, 2)}`);
 
-      // Check if email integration is available
-      const isEmailActive = await this.emailService.isIntegrationActive(userId);
+      // Check if email integration is available from iOS app context first
+      const isEmailActiveFromContext = context?.integrations?.google?.connected === true;
+      
+      // Only check database if context doesn't provide integration status
+      let isEmailActive = isEmailActiveFromContext;
+      if (!context?.integrations) {
+        isEmailActive = await this.emailService.isIntegrationActive(userId);
+      }
+      
+      logger.info(`Email integration check - context: ${JSON.stringify(context?.integrations)}, isEmailActive: ${isEmailActive}`);
       
       if (!isEmailActive) {
         return this.handleNoEmailIntegration(userInput);

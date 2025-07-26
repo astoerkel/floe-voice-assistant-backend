@@ -82,9 +82,29 @@ class EmailAgent {
 
   async processCommand(userId, input, context = {}) {
     try {
-      logger.info(`Email agent processing command for user ${userId}:`, {
-        input: input.substring(0, 100)
+      logger.info(`🔧 Legacy EmailAgent processing command for user ${userId}:`, {
+        input: input.substring(0, 100),
+        integrations: context?.integrations
       });
+
+      // Check if Gmail integration is active from iOS app context first
+      const isActiveFromContext = context?.integrations?.google?.connected === true;
+      
+      // Only check database if context doesn't provide integration status
+      let isActive = isActiveFromContext;
+      if (!context?.integrations) {
+        isActive = await this.gmailService.isIntegrationActive(userId);
+      }
+      
+      logger.info(`🔧 Legacy EmailAgent OAuth check - context: ${JSON.stringify(context?.integrations)}, isActive: ${isActive}`);
+      
+      if (!isActive) {
+        return {
+          text: "I'd be happy to help with your emails, but you'll need to connect your Gmail account first. Would you like me to guide you through setting that up?",
+          actions: [],
+          suggestions: ['Connect Gmail account', 'Check integration status', 'Try again later']
+        };
+      }
 
       // Parse the intent and extract relevant information
       const intent = await this.parseEmailIntent(input);
@@ -164,7 +184,16 @@ class EmailAgent {
   async handleGetEmails(userId, intent, context) {
     try {
       const limit = intent.filter === 'recent' ? 5 : 10;
-      const emails = await this.getEmails(userId, intent.filter, limit);
+      const emails = await this.getEmails(userId, intent.filter, limit, context);
+      
+      // Check if Google isn't connected
+      if (emails.notConnected) {
+        return {
+          text: "I can see your Google account is connected, but I'm having trouble accessing your emails. Let me check your connection status.",
+          actions: [],
+          suggestions: ['Check connection status', 'Try again', 'Reconnect Google']
+        };
+      }
       
       if (emails.length === 0) {
         const filterText = intent.filter === 'unread' ? 'unread emails' : 
@@ -327,13 +356,21 @@ class EmailAgent {
   }
 
   // Email data management methods
-  async getEmails(userId, filter = 'all', limit = 10) {
+  async getEmails(userId, filter = 'all', limit = 10, context = {}) {
     try {
-      // Check if Gmail integration is active
-      const isActive = await this.gmailService.isIntegrationActive(userId);
+      // Check if Gmail integration is active from iOS app context first
+      const isActiveFromContext = context?.integrations?.google?.connected === true;
+      
+      // Only check database if context doesn't provide integration status
+      let isActive = isActiveFromContext;
+      if (!context?.integrations) {
+        isActive = await this.gmailService.isIntegrationActive(userId);
+      }
+      
       if (!isActive) {
-        logger.warn(`Gmail integration not active for user ${userId}`);
-        return [];
+        logger.warn(`Gmail integration not active for user ${userId} (context: ${isActiveFromContext}, db check: ${!context?.integrations})`);
+        // Return a special indicator that Google isn't connected
+        return { notConnected: true };
       }
 
       let query = '';

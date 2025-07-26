@@ -6,14 +6,14 @@ A comprehensive Node.js/Express backend for a voice assistant application that r
 
 - **Framework**: Node.js with Express.js
 - **AI/LLM**: LangChain with OpenAI GPT-4 and Anthropic Claude
-- **Database**: PostgreSQL with Prisma ORM (Railway managed)
+- **Database**: PostgreSQL with Prisma ORM (Hetzner managed)
 - **Authentication**: JWT + Apple Sign In + Google OAuth
 - **Real-time**: Socket.IO for WebSocket connections
 - **Voice Processing**: OpenAI Whisper API for speech-to-text, Google Text-to-Speech for responses
-- **Task Queue**: Bull/BullMQ with Redis (Railway managed)
+- **Task Queue**: Bull/BullMQ with Redis (Hetzner managed)
 - **Caching**: Redis for session/token caching
-- **File Storage**: Railway volumes for audio files
-- **Deployment**: Railway for hosting and CI/CD
+- **File Storage**: Hetzner volumes for audio files
+- **Deployment**: Hetzner Cloud for hosting with SSH deployment
 
 ## Project Structure
 
@@ -35,9 +35,8 @@ voice-assistant-backend/
 │   ├── utils/           # Utility functions
 │   └── websocket/       # WebSocket handlers
 ├── tests/               # Test files
-├── railway.json         # Railway deployment config
-├── nixpacks.toml        # Nixpacks build config
-└── Procfile            # Process definitions
+├── ecosystem.config.js  # PM2 process configuration
+└── deploy.sh           # Hetzner deployment script
 ```
 
 ## Quick Start
@@ -114,7 +113,7 @@ npm run dev
 ### ✅ Completed
 - [x] Basic Express server structure
 - [x] Prisma database schema
-- [x] Railway deployment configuration
+- [x] Hetzner deployment configuration
 - [x] Error handling and logging
 - [x] API route structure
 - [x] WebSocket setup
@@ -134,28 +133,27 @@ npm run dev
 
 See `.env.example` for all required environment variables.
 
-## Railway Deployment
+## Hetzner Deployment
 
-1. **Install Railway CLI**:
+1. **Setup SSH connection**:
 ```bash
-npm install -g @railway/cli
+# Add Hetzner server to SSH config as 'hetzner'
+ssh-copy-id hetzner
 ```
 
-2. **Initialize Railway project**:
+2. **Deploy to server**:
 ```bash
-railway login
-railway init
+ssh hetzner 'cd /app && git pull && npm install && pm2 restart all'
 ```
 
-3. **Add services**:
+3. **Check deployment status**:
 ```bash
-railway add postgresql
-railway add redis
+ssh hetzner 'pm2 status'
 ```
 
-4. **Deploy**:
+4. **View logs**:
 ```bash
-railway up
+ssh hetzner 'pm2 logs'
 ```
 
 ## Contributing

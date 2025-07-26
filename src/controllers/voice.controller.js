@@ -23,7 +23,7 @@ class VoiceController {
         return res.status(400).json({ error: 'Validation failed', details: errors.array() });
       }
 
-      const { text, context = {}, platform = 'ios' } = req.body;
+      const { text, context = {}, platform = 'ios', integrations = {} } = req.body;
       const userId = req.user.id;
       
       // Validate input
@@ -68,7 +68,8 @@ class VoiceController {
         userId,
         transcriptionMethod: 'apple_speech',
         sessionId: context.sessionId || `session_${Date.now()}_${userId}`,
-        startTime
+        startTime,
+        integrations // Pass OAuth integration status from iOS app
       };
 
       // Try new LangChain coordinator first, fallback to legacy on failure

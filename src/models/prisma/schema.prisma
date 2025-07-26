@@ -11,37 +11,44 @@ datasource db {
 }
 
 model User {
-  id                String   @id @default(cuid())
-  email             String   @unique
-  name              String?
-  preferredName     String?  // Added for personalization
-  timezone          String?  // Added for personalization
-  lastActiveAt      DateTime? // Added for context management
-  provider          String   @default("apple") // 'apple', 'google', 'email'
-  providerId        String?
-  appleId           String?  @unique
-  googleId          String?  @unique
-  passwordHash      String?
-  profilePicture    String?
+  id                    String   @id @default(cuid())
+  email                 String   @unique
+  name                  String?
+  appleUserId          String?  @unique
+  profilePictureUrl    String?
   
-  // Subscription fields
-  subscriptionStatus String   @default("trial")
-  subscriptionPlan   String   @default("trial")
-  trialStartsAt      DateTime @default(now())
-  trialEndsAt        DateTime?
-  subscriptionEndsAt DateTime?
+  // Subscription Management
+  subscriptionTier     String   @default("free") // "free", "premium", "pro"
+  subscriptionStatus   String   @default("active") // "active", "cancelled", "expired"
+  subscriptionExpiry   DateTime?
+  stripeCustomerId     String?
   
-  // Usage tracking
-  commandsThisMonth  Int      @default(0)
-  commandsTotal      Int      @default(0)
-  lastCommandAt      DateTime?
-  lastResetAt        DateTime @default(now())
+  // Usage Tracking
+  monthlyUsageCount    Int      @default(0)
+  monthlyUsageLimit    Int      @default(50)
+  lastUsageReset       DateTime @default(now())
+  totalCommandsUsed    Int      @default(0)
   
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  lastActive        DateTime @default(now())
-  isActive          Boolean  @default(true)
-  role              String   @default("user") // user, admin
+  // Apple In-App Purchase
+  receiptData          String?
+  lastReceiptValidation DateTime?
+  
+  // Legacy fields (keeping for migration compatibility)
+  preferredName        String?  // Added for personalization
+  timezone             String?  // Added for personalization
+  lastActiveAt         DateTime? // Added for context management
+  provider             String   @default("apple") // 'apple', 'google', 'email'
+  providerId           String?
+  appleId              String?  @unique
+  googleId             String?  @unique
+  passwordHash         String?
+  profilePicture       String?
+  
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  lastActive           DateTime @default(now())
+  isActive             Boolean  @default(true)
+  role                 String   @default("user") // user, admin
   
   // Relationships
   integrations      Integration[]
@@ -54,9 +61,12 @@ model User {
   transcriptionEvents TranscriptionEvent[]
   userPreferences   UserPreferences?  // Added for personalization
   userLearningData  UserLearningData[] // Added for learning
+  subscriptionEvents SubscriptionEvent[]
+  usageEvents       UsageEvent[]
 
   @@index([email])
   @@index([subscriptionStatus])
+  @@index([subscriptionTier])
   @@map("users")
 }
 
@@ -439,6 +449,40 @@ model OAuthState {
   @@index([state])
   @@index([expiresAt])
   @@map("oauth_states")
+}
+
+model SubscriptionEvent {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  eventType   String   // "purchase", "upgrade", "downgrade", "cancel", "restore"
+  fromTier    String?
+  toTier      String
+  productId   String?  // Apple product ID
+  price       Decimal?
+  currency    String?
+  
+  receiptData String?
+  transactionId String?
+  
+  createdAt   DateTime @default(now())
+
+  @@map("subscription_events")
+}
+
+model UsageEvent {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  eventType     String   // "voice_command", "api_call", "integration_use"
+  feature       String?  // "calendar", "email", "tasks", "basic_chat"
+  monthYear     String   // "2025-07"
+  
+  createdAt     DateTime @default(now())
+
+  @@map("usage_events")
 }
 
 // Models for LangChain Coordinator

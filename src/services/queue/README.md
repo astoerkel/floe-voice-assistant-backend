@@ -211,24 +211,32 @@ REDIS_PORT=6379
 REDIS_PASSWORD=secret
 ```
 
-### Railway Deployment
+### Hetzner Deployment
 
-The worker process runs as a separate service:
+The worker process runs with PM2:
 
-```yaml
-# railway.json
-{
-  "services": [
+```javascript
+// ecosystem.config.js
+module.exports = {
+  apps: [
     {
-      "name": "web",
-      "command": "npm start"
+      name: 'voice-assistant-web',
+      script: 'npm start',
+      instances: 1,
+      env: {
+        NODE_ENV: 'production'
+      }
     },
     {
-      "name": "worker",
-      "command": "npm run worker"
+      name: 'voice-assistant-worker',
+      script: 'npm run worker',
+      instances: 1,
+      env: {
+        NODE_ENV: 'production'
+      }
     }
   ]
-}
+};
 ```
 
 ## Monitoring

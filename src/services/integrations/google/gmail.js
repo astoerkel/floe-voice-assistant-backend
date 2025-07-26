@@ -4,7 +4,7 @@ const logger = require('../../../utils/logger');
 
 class GmailIntegration {
   constructor() {
-    this.serviceName = 'gmail';
+    this.serviceName = 'google'; // Changed from 'gmail' to 'google' to match OAuth integration type
     this.oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
@@ -551,7 +551,42 @@ class GmailIntegration {
         }
       });
 
-      return integration && integration.isActive;
+      if (!integration || !integration.isActive) {
+        logger.info(`Gmail integration not found or inactive for user ${userId}`);
+        return false;
+      }
+
+      // Check if we have valid tokens
+      if (!integration.accessToken) {
+        logger.warn(`Gmail integration exists but no access token for user ${userId}`);
+        return false;
+      }
+
+      // Try to get access token to verify it's working
+      try {
+        await this.getAccessToken(userId);
+        logger.info(`Gmail integration verified active for user ${userId}`);
+        return true;
+      } catch (tokenError) {
+        logger.error(`Gmail integration token validation failed for user ${userId}:`, tokenError.message);
+        // Mark integration as inactive if token is invalid
+        await prisma.integration.update({
+          where: {
+            userId_type: {
+              userId,
+              type: this.serviceName
+            }
+          },
+          data: {
+            isActive: false,
+            syncErrors: {
+              lastError: tokenError.message,
+              timestamp: new Date().toISOString()
+            }
+          }
+        });
+        return false;
+      }
     } catch (error) {
       logger.error('Failed to check integration status:', error);
       return false;
