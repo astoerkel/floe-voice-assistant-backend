@@ -53,18 +53,18 @@ deploy() {
   check_server
   
   echo "📦 Pulling latest code..."
-  run_remote "cd /app && git pull origin main"
+  run_remote "cd voice-assistant-backend && git pull origin main"
   
   if [ "$NO_INSTALL" = false ]; then
     echo "📥 Installing dependencies..."
-    run_remote "cd /app && npm install --production"
+    run_remote "cd voice-assistant-backend && npm install --production"
     
     echo "🗄️ Running database migrations..."
-    run_remote "cd /app && npm run migrate"
+    run_remote "cd voice-assistant-backend && npm run migrate"
   fi
   
   echo "🔄 Restarting services..."
-  run_remote "cd /app && pm2 restart ecosystem.config.js"
+  run_remote "cd voice-assistant-backend && pm2 restart ecosystem.config.js"
   
   echo "⏳ Waiting for services to start..."
   sleep 5
