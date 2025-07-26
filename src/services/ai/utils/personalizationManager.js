@@ -47,7 +47,7 @@ class PersonalizationManager {
         userId: user.id,
         name: user.name,
         email: user.email,
-        preferredName: user.preferredName || user.name?.split(' ')[0],
+        preferredName: user.name?.split(' ')[0] || 'there',
         timezone: user.timezone || this.defaultPreferences.timezone,
         
         // Preferences with fallbacks
@@ -464,7 +464,7 @@ class PersonalizationManager {
       userId,
       name: null,
       email: null,
-      preferredName: null,
+      preferredName: 'there',
       timezone: this.defaultPreferences.timezone,
       preferences: this.defaultPreferences,
       communicationStyle: this.defaultPreferences.communicationStyle,

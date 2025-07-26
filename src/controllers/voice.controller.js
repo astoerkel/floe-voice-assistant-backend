@@ -24,6 +24,18 @@ class VoiceController {
       }
 
       const { text, context = {}, platform = 'ios', integrations = {} } = req.body;
+      
+      // Check if user is authenticated (JWT token valid)
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({
+          success: false,
+          text: "Authentication required. Please sign in to use voice commands.",
+          audioBase64: null,
+          error: 'Authentication required',
+          message: 'Please re-authenticate to continue using voice commands'
+        });
+      }
+      
       const userId = req.user.id;
       
       // Validate input

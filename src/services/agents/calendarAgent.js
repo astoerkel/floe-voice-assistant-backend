@@ -316,33 +316,11 @@ class CalendarAgent {
   // Calendar data management methods
   async getCalendarEvents(userId, startDate, endDate) {
     try {
-      // For now, return mock data. In a real implementation, this would:
-      // 1. Check user's Google Calendar integration
-      // 2. Fetch events from Google Calendar API
-      // 3. Return formatted events
-      
-      const mockEvents = [
-        {
-          id: 'event1',
-          title: 'Team Meeting',
-          startTime: new Date(Date.now() + 2 * 60 * 60 * 1000), // 2 hours from now
-          endTime: new Date(Date.now() + 3 * 60 * 60 * 1000),
-          location: 'Conference Room A',
-          attendees: ['john@example.com', 'jane@example.com']
-        },
-        {
-          id: 'event2',
-          title: 'Project Review',
-          startTime: new Date(Date.now() + 4 * 60 * 60 * 1000), // 4 hours from now
-          endTime: new Date(Date.now() + 5 * 60 * 60 * 1000),
-          location: 'Virtual',
-          attendees: ['manager@example.com']
-        }
-      ];
-      
-      return mockEvents.filter(event => 
-        event.startTime >= startDate && event.startTime <= endDate
-      );
+      // Check if Google Calendar integration is active
+      // In production, this would fetch real events from Google Calendar API
+      // For now, return empty array to avoid mock data issues
+      logger.warn(`Calendar integration not yet implemented for user ${userId}`);
+      return [];
     } catch (error) {
       logger.error('Get calendar events failed:', error);
       return [];
@@ -351,24 +329,9 @@ class CalendarAgent {
 
   async createCalendarEvent(eventData) {
     try {
-      // For now, return mock data. In a real implementation, this would:
-      // 1. Validate event data
-      // 2. Create event in Google Calendar
-      // 3. Store reference in database
-      // 4. Return created event
-      
-      const mockEvent = {
-        id: `event_${Date.now()}`,
-        title: eventData.title,
-        startTime: eventData.startTime,
-        endTime: eventData.endTime || new Date(eventData.startTime.getTime() + 60 * 60 * 1000),
-        location: eventData.location || 'TBD',
-        attendees: eventData.attendees || [],
-        userId: eventData.userId
-      };
-      
-      logger.info('Calendar event created:', mockEvent);
-      return mockEvent;
+      // Google Calendar integration not yet implemented
+      logger.warn(`Calendar event creation not yet implemented for user ${eventData.userId}`);
+      throw new Error('Calendar integration not available. Please set up Google Calendar integration first.');
     } catch (error) {
       logger.error('Create calendar event failed:', error);
       throw error;

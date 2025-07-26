@@ -57,7 +57,8 @@ const io = new Server(server, {
     credentials: true
   },
   transports: ['websocket', 'polling'],
-  allowEIO3: true
+  allowEIO3: true,
+  allowEIO4: true
 });
 
 // Initialize connections asynchronously to not block server startup

@@ -389,27 +389,9 @@ class TaskAgent {
   // Task data management methods
   async createTask(taskData) {
     try {
-      // For now, return mock data. In a real implementation, this would:
-      // 1. Validate task data
-      // 2. Create task in Airtable or database
-      // 3. Set up reminders if needed
-      // 4. Return created task
-      
-      const mockTask = {
-        id: `task_${Date.now()}`,
-        title: taskData.title,
-        description: taskData.description || '',
-        dueDate: taskData.dueDate || null,
-        priority: taskData.priority || 'medium',
-        status: 'pending',
-        type: taskData.type || 'task',
-        userId: taskData.userId,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
-      
-      logger.info('Task created:', mockTask);
-      return mockTask;
+      // Task integration not yet implemented
+      logger.warn(`Task creation not yet implemented for user ${taskData.userId}`);
+      throw new Error('Task management integration not available. Please set up task management integration first.');
     } catch (error) {
       logger.error('Create task failed:', error);
       throw error;

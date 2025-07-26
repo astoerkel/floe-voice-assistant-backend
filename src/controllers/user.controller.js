@@ -13,7 +13,6 @@ class UserController {
           id: true,
           email: true,
           name: true,
-          preferredName: true,
           profilePictureUrl: true,
           timezone: true,
           subscriptionTier: true,
@@ -100,7 +99,6 @@ class UserController {
 
       const { 
         name, 
-        preferredName, 
         timezone, 
         profilePictureUrl 
       } = req.body;
@@ -109,7 +107,6 @@ class UserController {
         where: { id: req.user.id },
         data: {
           ...(name && { name }),
-          ...(preferredName && { preferredName }),
           ...(timezone && { timezone }),
           ...(profilePictureUrl && { profilePictureUrl }),
           lastActive: new Date()
@@ -118,7 +115,6 @@ class UserController {
           id: true,
           email: true,
           name: true,
-          preferredName: true,
           profilePictureUrl: true,
           timezone: true,
           lastActive: true
@@ -556,7 +552,6 @@ class UserController {
 // Validation middleware
 const updateProfileValidation = [
   body('name').optional().isString().trim().isLength({ min: 1, max: 100 }).withMessage('Name must be 1-100 characters'),
-  body('preferredName').optional().isString().trim().isLength({ min: 1, max: 50 }).withMessage('Preferred name must be 1-50 characters'),
   body('timezone').optional().isString().withMessage('Timezone must be a string'),
   body('profilePictureUrl').optional().isURL().withMessage('Profile picture must be a valid URL')
 ];
