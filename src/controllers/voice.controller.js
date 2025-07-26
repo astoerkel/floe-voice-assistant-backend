@@ -118,7 +118,7 @@ class VoiceController {
       // regardless of minor coordinator issues. This ensures the client gets a proper response
       // even when there are internal processing warnings or fallbacks.
       const hasValidResponse = result.response && result.response.trim().length > 0;
-      const hasValidAudio = audioResponse?.audioBase64;
+      const hasValidAudio = !!audioResponse?.audioBase64;
       const overallSuccess = hasValidAudio || hasValidResponse;
 
       // Log success determination for debugging
@@ -272,7 +272,7 @@ class VoiceController {
       // regardless of minor coordinator issues. This ensures the client gets a proper response
       // even when there are internal processing warnings or fallbacks.
       const hasValidResponse = result.response && result.response.trim().length > 0;
-      const hasValidAudio = audioResponse?.audioBase64;
+      const hasValidAudio = !!audioResponse?.audioBase64;
       const overallSuccess = hasValidAudio || hasValidResponse;
 
       // Return format expected by iOS app: { success: boolean, text: string, audioBase64: string }
@@ -359,7 +359,7 @@ class VoiceController {
       // regardless of minor coordinator issues. This ensures the client gets a proper response
       // even when there are internal processing warnings or fallbacks.
       const hasValidResponse = result.response && result.response.trim().length > 0;
-      const hasValidAudio = audioResponse?.audioBase64;
+      const hasValidAudio = !!audioResponse?.audioBase64;
       const overallSuccess = hasValidAudio || hasValidResponse;
 
       // Return format expected by iOS app: { success: boolean, text: string, audioBase64: string }
@@ -855,7 +855,7 @@ class VoiceController {
 
         // Determine overall success: if we have audio response OR valid text response, consider it successful
         const hasValidResponse = result.response && result.response.trim().length > 0;
-        const hasValidAudio = audioResponse?.audioBase64;
+        const hasValidAudio = !!audioResponse?.audioBase64;
         const overallSuccess = hasValidAudio || (hasValidResponse && result.success !== false);
 
         // Return format expected by iOS app: { success: boolean, text: string, audioBase64: string }

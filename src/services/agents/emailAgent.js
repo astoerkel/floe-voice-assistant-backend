@@ -489,10 +489,8 @@ class EmailAgent {
           query = 'is:important';
           break;
         case 'recent':
-          // Get emails from last 6 hours
-          const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
-          const dateFilter = sixHoursAgo.toISOString().split('T')[0].replace(/-/g, '/');
-          query = `after:${dateFilter}`;
+          // Get unread emails (more useful than time-based recent)
+          query = 'is:unread';
           break;
         default:
           query = '';
