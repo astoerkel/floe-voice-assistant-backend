@@ -255,21 +255,38 @@ class GoogleOAuthService {
             const userInfoResponse = await oauth2.userinfo.get();
             const userInfo = userInfoResponse.data;
             
-            // Create or get user
-            let user = await prisma.user.findUnique({
-                where: { email: userInfo.email }
-            });
-            
-            if (!user) {
-                // Create new user
-                user = await prisma.user.create({
-                    data: {
-                        email: userInfo.email,
-                        name: userInfo.name || userInfo.email,
-                        isActive: true,
-                        lastActive: new Date()
-                    }
+            // Use authenticated user if available, otherwise create/get user by email
+            let user;
+            if (sessionData.userId) {
+                // Link to existing authenticated user
+                user = await prisma.user.findUnique({
+                    where: { id: sessionData.userId, isActive: true }
                 });
+                
+                if (!user) {
+                    throw new Error('Authenticated user not found or inactive');
+                }
+                
+                logger.info(`Linking Google account ${userInfo.email} to existing user ${user.id} (${user.email})`);
+            } else {
+                // Fallback: create or get user by Google email (legacy behavior)
+                user = await prisma.user.findUnique({
+                    where: { email: userInfo.email }
+                });
+                
+                if (!user) {
+                    // Create new user
+                    user = await prisma.user.create({
+                        data: {
+                            email: userInfo.email,
+                            name: userInfo.name || userInfo.email,
+                            isActive: true,
+                            lastActive: new Date()
+                        }
+                    });
+                    
+                    logger.info(`Created new user ${user.id} for Google account ${userInfo.email}`);
+                }
             }
             
             // Create or update integration

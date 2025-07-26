@@ -205,6 +205,30 @@ class OAuthController {
                 });
             }
             
+            // Extract user info from authorization header if present
+            let userId = null;
+            const authHeader = req.headers.authorization;
+            const token = authHeader && authHeader.split(' ')[1];
+            
+            if (token) {
+                try {
+                    const jwtService = require('../services/auth/jwt');
+                    const decoded = jwtService.verifyAccessToken(token);
+                    
+                    // Verify user exists and is active
+                    const user = await prisma.user.findUnique({
+                        where: { id: decoded.userId, isActive: true }
+                    });
+                    
+                    if (user) {
+                        userId = user.id;
+                        logger.info(`OAuth init with authenticated user: ${userId}`);
+                    }
+                } catch (jwtError) {
+                    logger.warn('Invalid JWT token in OAuth init, proceeding without user link:', jwtError.message);
+                }
+            }
+            
             // Generate secure state token
             const state = crypto.randomBytes(32).toString('hex');
             
@@ -213,6 +237,7 @@ class OAuthController {
                 deviceId,
                 returnUrl,
                 type: 'google',
+                userId, // Include authenticated user ID if available
                 createdAt: new Date().toISOString()
             };
             
@@ -229,7 +254,7 @@ class OAuthController {
                 await prisma.oAuthState.create({
                     data: {
                         state,
-                        userId: null, // Public OAuth, no user yet
+                        userId: userId, // Store authenticated user ID if available
                         provider: 'google',
                         returnUrl: sessionData.returnUrl,
                         expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes

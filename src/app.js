@@ -55,7 +55,9 @@ const io = new Server(server, {
   cors: {
     origin: true, // Allow all origins for mobile app connections
     credentials: true
-  }
+  },
+  transports: ['websocket', 'polling'],
+  allowEIO3: true
 });
 
 // Initialize connections asynchronously to not block server startup
