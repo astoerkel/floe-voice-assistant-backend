@@ -132,16 +132,8 @@ class VoiceController {
         audioDataSize: audioResponse?.audioBase64?.length || 0
       });
 
-      // Log the exact response format being sent to iOS for debugging
-      logger.info('Sending response to iOS:', {
-        success: overallSuccess,
-        textLength: result.response?.length || 0,
-        hasAudioBase64: !!audioResponse?.audioBase64,
-        audioBase64Length: audioResponse?.audioBase64?.length || 0
-      });
-
-      // Return format expected by iOS app: { success: boolean, text: string, audioBase64: string }
-      res.json({
+      // Construct response object carefully to prevent field corruption
+      const responseObject = {
         success: overallSuccess,
         text: result.response, // The actual response text (not nested)
         audioBase64: audioResponse?.audioBase64 || null, // Direct audio data (not nested)
@@ -166,7 +158,22 @@ class VoiceController {
           hapticPattern: this.getHapticPattern(result.intent || result.action?.type)
         },
         audioResponse
+      };
+
+      // Log the exact response format being sent to iOS for debugging
+      logger.info('Sending response to iOS:', {
+        success: responseObject.success,
+        successType: typeof responseObject.success,
+        textLength: responseObject.text?.length || 0,
+        textType: typeof responseObject.text,
+        hasAudioBase64: !!responseObject.audioBase64,
+        audioBase64Length: responseObject.audioBase64?.length || 0,
+        audioBase64Type: typeof responseObject.audioBase64,
+        responseObjectKeys: Object.keys(responseObject)
       });
+
+      // Return format expected by iOS app: { success: boolean, text: string, audioBase64: string }
+      res.json(responseObject);
       
     } catch (error) {
       logger.error('Text processing error:', error);
