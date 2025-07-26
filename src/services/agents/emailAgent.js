@@ -114,6 +114,12 @@ class EmailAgent {
         case 'get_emails':
           response = await this.handleGetEmails(userId, intent, context);
           break;
+        case 'get_latest_email_info':
+          response = await this.handleGetLatestEmailInfo(userId, intent, context);
+          break;
+        case 'get_email_info':
+          response = await this.handleGetEmailInfo(userId, intent, context);
+          break;
         case 'send_email':
           response = await this.handleSendEmail(userId, intent, context);
           break;
@@ -145,8 +151,26 @@ class EmailAgent {
   async parseEmailIntent(input) {
     const lowerInput = input.toLowerCase();
     
+    // Specific email information patterns (who, what, when)
+    if ((lowerInput.includes('from whom') || lowerInput.includes('who sent') || lowerInput.includes('who is the') || lowerInput.includes('from who')) 
+        && (lowerInput.includes('email') || lowerInput.includes('message'))) {
+      if (lowerInput.includes('last') || lowerInput.includes('latest') || lowerInput.includes('recent') || lowerInput.includes('most recent')) {
+        return { type: 'get_latest_email_info', infoType: 'sender' };
+      }
+      return { type: 'get_email_info', infoType: 'sender' };
+    }
+    
+    if ((lowerInput.includes('what is') || lowerInput.includes('what was')) 
+        && (lowerInput.includes('subject') || lowerInput.includes('about')) 
+        && (lowerInput.includes('email') || lowerInput.includes('message'))) {
+      if (lowerInput.includes('last') || lowerInput.includes('latest') || lowerInput.includes('recent') || lowerInput.includes('most recent')) {
+        return { type: 'get_latest_email_info', infoType: 'subject' };
+      }
+      return { type: 'get_email_info', infoType: 'subject' };
+    }
+    
     // Get emails patterns
-    if (lowerInput.includes('show') || lowerInput.includes('check') || lowerInput.includes('read')) {
+    if (lowerInput.includes('show') || lowerInput.includes('check') || lowerInput.includes('read') || lowerInput.includes('list')) {
       if (lowerInput.includes('unread')) {
         return { type: 'get_emails', filter: 'unread' };
       } else if (lowerInput.includes('important')) {
@@ -343,6 +367,89 @@ class EmailAgent {
         text: "I couldn't mark the email as read. Please try again.",
         actions: [],
         suggestions: ['Show emails first', 'Try again']
+      };
+    }
+  }
+
+  async handleGetLatestEmailInfo(userId, intent, context) {
+    try {
+      // Get the most recent email
+      const emails = await this.getEmails(userId, 'recent', 1, context);
+      
+      if (emails.length === 0) {
+        return {
+          text: "You don't have any recent emails.",
+          actions: [],
+          suggestions: ['Check all emails', 'Send an email', 'Search emails']
+        };
+      }
+      
+      const latestEmail = emails[0];
+      let responseText = '';
+      
+      if (intent.infoType === 'sender') {
+        responseText = `The most recent email is from ${latestEmail.senderName || latestEmail.sender}.`;
+      } else if (intent.infoType === 'subject') {
+        responseText = `The subject of the most recent email is "${latestEmail.subject}".`;
+      }
+      
+      return {
+        text: responseText,
+        actions: [{
+          type: 'view_email',
+          emailId: latestEmail.id,
+          subject: latestEmail.subject
+        }],
+        suggestions: ['Read this email', 'Check other emails', 'Reply to this email']
+      };
+    } catch (error) {
+      logger.error('Handle get latest email info failed:', error);
+      return {
+        text: "I couldn't retrieve information about your latest email. Please try again.",
+        actions: [],
+        suggestions: ['Try again', 'Check connection']
+      };
+    }
+  }
+
+  async handleGetEmailInfo(userId, intent, context) {
+    try {
+      // For general email info, get recent emails
+      const emails = await this.getEmails(userId, 'recent', 5, context);
+      
+      if (emails.length === 0) {
+        return {
+          text: "You don't have any recent emails.",
+          actions: [],
+          suggestions: ['Check all emails', 'Send an email', 'Search emails']
+        };
+      }
+      
+      let responseText = '';
+      
+      if (intent.infoType === 'sender') {
+        const senders = emails.map(email => email.senderName || email.sender).slice(0, 3);
+        responseText = `Your recent emails are from: ${senders.join(', ')}.`;
+      } else if (intent.infoType === 'subject') {
+        const subjects = emails.map(email => email.subject).slice(0, 3);
+        responseText = `Your recent email subjects are: ${subjects.join(', ')}.`;
+      }
+      
+      return {
+        text: responseText,
+        actions: emails.slice(0, 3).map(email => ({
+          type: 'view_email',
+          emailId: email.id,
+          subject: email.subject
+        })),
+        suggestions: ['Read email', 'Check more emails', 'Search emails']
+      };
+    } catch (error) {
+      logger.error('Handle get email info failed:', error);
+      return {
+        text: "I couldn't retrieve information about your emails. Please try again.",
+        actions: [],
+        suggestions: ['Try again', 'Check connection']
       };
     }
   }
