@@ -1,6 +1,95 @@
-# Hetzner Deployment Guide
+# Floe Backend Deployment Guide
 
-This guide covers deploying the Voice Assistant Backend to Hetzner Cloud using SSH-based deployment.
+This guide covers deploying the **clean Floe backend** to Hetzner Cloud. The backend was completely rebuilt on 2025-01-27 with working LangChain agents and real Google API integrations.
+
+## ✅ Current Production Status
+- **Location**: /opt/floe-backend (NEW - no longer /opt/voice-assistant)
+- **Database**: floedb with floeuser (fully operational)
+- **PM2**: 2x cluster instances running (restart count: 17+)
+- **Domain**: https://floe.cognetica.de
+- **Features**: Working LangChain + OpenRouter + Google APIs
+- **Environment**: Production variables loaded from .env.hetzner-production
+- **Last Updated**: 2025-01-27 (syntax fixes + env setup)
+- **Status**: ✅ All endpoints tested and responding correctly
+
+## Complete Clean Install
+
+If you need to completely remove and rebuild the backend (as done on 2025-01-27):
+
+### 1. Complete Removal of Old Backend
+```bash
+ssh hetzner
+
+# Stop all PM2 processes
+pm2 delete all
+pm2 save
+
+# Remove old backend directories
+rm -rf /opt/voice-assistant
+rm -rf /opt/voice-assistant-backend
+
+# Clean up old database
+sudo -u postgres psql -c "DROP DATABASE IF EXISTS voiceassistant;"
+sudo -u postgres psql -c "DROP USER IF EXISTS voiceassistant;"
+
+# Clear Redis cache
+redis-cli FLUSHALL
+
+# Clean PM2 logs
+rm -rf ~/.pm2/logs/*
+```
+
+### 2. Create New Floe Backend
+```bash
+# Create directory structure
+mkdir -p /opt/floe-backend/src/{config,controllers,services/{langchain,google},middleware,routes}
+mkdir -p /opt/floe-backend/logs
+
+# Set up database
+sudo -u postgres psql -c "CREATE DATABASE floedb;"
+sudo -u postgres psql -c "CREATE USER floeuser WITH PASSWORD 'floesecurepass123';"
+sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE floedb TO floeuser;"
+
+# Create database tables
+sudo -u postgres psql floedb << 'EOF'
+CREATE TABLE users (
+  id SERIAL PRIMARY KEY,
+  email VARCHAR(255) UNIQUE NOT NULL,
+  name VARCHAR(255),
+  google_id VARCHAR(255) UNIQUE,
+  google_refresh_token TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE conversations (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id),
+  query TEXT,
+  response TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO floeuser;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO floeuser;
+EOF
+```
+
+### 3. Deploy Application Files
+The complete backend code structure should be deployed to `/opt/floe-backend/` including:
+- `src/app.js` - Main Express application
+- `src/services/langchain/agent.js` - LangChain agent with OpenRouter
+- `src/services/google/auth.js` - Google OAuth & API integrations
+- `package.json` with dependencies
+- `ecosystem.config.js` for PM2
+- `.env` with environment variables
+
+### 4. Install and Start
+```bash
+cd /opt/floe-backend
+npm install
+pm2 start ecosystem.config.js --env production
+pm2 save
+```
 
 ## Prerequisites
 
@@ -92,27 +181,27 @@ ssh hetzner 'pm2 status'
 
 ### PM2 Commands
 ```bash
-# Check all services status
+# Check service status
 ssh hetzner 'pm2 status'
 
 # View logs
-ssh hetzner 'pm2 logs'
-ssh hetzner 'pm2 logs voice-assistant-api'
-ssh hetzner 'pm2 logs voice-assistant-worker'
+ssh hetzner 'pm2 logs floe-backend'
+ssh hetzner 'pm2 logs floe-backend --lines 50'
 
-# Restart services
-ssh hetzner 'pm2 restart all'
-ssh hetzner 'pm2 restart voice-assistant-api'
-ssh hetzner 'pm2 restart voice-assistant-worker'
+# Restart service
+ssh hetzner 'pm2 restart floe-backend'
 
-# Stop services
-ssh hetzner 'pm2 stop all'
+# Stop service
+ssh hetzner 'pm2 stop floe-backend'
 
-# Delete services (to reconfigure)
-ssh hetzner 'pm2 delete all'
+# Delete service (to reconfigure)
+ssh hetzner 'pm2 delete floe-backend'
 
-# Start services
-ssh hetzner 'cd /app && pm2 start ecosystem.config.js'
+# Start service
+ssh hetzner 'cd /opt/floe-backend && pm2 start ecosystem.config.js --env production'
+
+# Save PM2 configuration
+ssh hetzner 'pm2 save'
 ```
 
 ### Health Checks
@@ -131,17 +220,53 @@ ssh hetzner 'tail -f /opt/voice-assistant/logs/worker-combined.log'
 ## Database Management
 
 ```bash
-# Connect to PostgreSQL
-ssh hetzner 'psql -d voice_assistant'
+# Connect to PostgreSQL (new floedb)
+ssh hetzner 'psql -d floedb -U floeuser'
 
-# Run migrations
-ssh hetzner 'cd /app && npm run migrate'
+# Check database connection
+ssh hetzner 'psql -d floedb -U floeuser -c "SELECT current_database();"'
 
-# Generate Prisma client
-ssh hetzner 'cd /app && npx prisma generate'
+# View tables
+ssh hetzner 'psql -d floedb -U floeuser -c "\dt"'
 
-# View database schema
-ssh hetzner 'cd /app && npx prisma db pull'
+# Check users table
+ssh hetzner 'psql -d floedb -U floeuser -c "SELECT count(*) FROM users;"'
+
+# Check conversations table  
+ssh hetzner 'psql -d floedb -U floeuser -c "SELECT count(*) FROM conversations;"'
+```
+
+## Environment Variables Setup
+
+```bash
+# Edit environment variables on server
+ssh hetzner 'nano /opt/floe-backend/.env'
+
+# Check current environment
+ssh hetzner 'cd /opt/floe-backend && grep -v "SECRET\|KEY\|PASSWORD" .env'
+
+# Required variables to configure:
+# - OPENROUTER_API_KEY
+# - GOOGLE_CLIENT_ID  
+# - GOOGLE_CLIENT_SECRET
+# - GOOGLE_APPLICATION_CREDENTIALS (path to service account JSON)
+```
+
+### ✅ Production Environment Update Process (2025-01-27)
+```bash
+# Complete process used for latest deployment:
+
+# 1. Copy production environment from local file
+scp .env.hetzner-production hetzner:/opt/floe-backend/.env
+
+# 2. Update database URL to use floedb
+ssh hetzner "cd /opt/floe-backend && sed -i 's/voiceassistant/floedb/g; s/voiceassistant123/floesecurepass123/g' .env"
+
+# 3. Restart PM2 with environment update
+ssh hetzner "cd /opt/floe-backend && pm2 restart floe-backend --update-env"
+
+# 4. Verify all services are working
+ssh hetzner "pm2 status && curl -s http://localhost:8080/health"
 ```
 
 ## Troubleshooting
@@ -151,7 +276,7 @@ ssh hetzner 'cd /app && npx prisma db pull'
 1. **Port 8080 already in use**
    ```bash
    ssh hetzner 'sudo lsof -ti:8080 | xargs -r sudo kill -9'
-   ssh hetzner 'pm2 restart voice-assistant-api'
+   ssh hetzner 'pm2 restart floe-backend'
    ```
 
 2. **Database connection failed**
@@ -159,8 +284,11 @@ ssh hetzner 'cd /app && npx prisma db pull'
    # Check PostgreSQL status
    ssh hetzner 'systemctl status postgresql'
    
+   # Test connection to floedb
+   ssh hetzner 'psql -d floedb -U floeuser -c "SELECT 1;"'
+   
    # Check connection string in .env
-   ssh hetzner 'cd /app && grep DATABASE_URL .env'
+   ssh hetzner 'cd /opt/floe-backend && grep DATABASE_URL .env'
    ```
 
 3. **Redis connection failed**
@@ -179,15 +307,59 @@ ssh hetzner 'cd /app && npx prisma db pull'
    ssh hetzner 'pm2 save'
    
    # Reset PM2
-   ssh hetzner 'pm2 kill && pm2 start ecosystem.config.js'
+   ssh hetzner 'pm2 kill && cd /opt/floe-backend && pm2 start ecosystem.config.js --env production'
+   ```
+
+5. **OpenRouter API errors**
+   ```bash
+   # Check if API key is set
+   ssh hetzner 'cd /opt/floe-backend && grep OPENROUTER_API_KEY .env'
+   
+   # Test OpenRouter connectivity
+   ssh hetzner 'curl -H "Authorization: Bearer YOUR_KEY" https://openrouter.ai/api/v1/models'
+   ```
+
+6. **Google API errors**
+   ```bash
+   # Check Google credentials file exists
+   ssh hetzner 'ls -la /opt/floe-backend/google-credentials.json'
+   
+   # Check OAuth settings
+   ssh hetzner 'cd /opt/floe-backend && grep GOOGLE_CLIENT .env'
+   ```
+
+7. **JavaScript syntax errors (escaped quotes/exclamation marks)**
+   ```bash
+   # Fix escaped exclamation marks in all JS files
+   ssh hetzner "find /opt/floe-backend/src/ -name '*.js' -exec sed -i 's/\!/!/g' {} \;"
+   
+   # Fix smart quotes that cause syntax errors
+   ssh hetzner "find /opt/floe-backend/src/ -name '*.js' -exec sed -i 's/'/'/g; s/'/'/g' {} \;"
+   
+   # Test if app starts without syntax errors
+   ssh hetzner "cd /opt/floe-backend && timeout 5s node src/app.js || true"
+   ```
+
+8. **Environment variables not loading after .env update**
+   ```bash
+   # Always use --update-env flag when restarting after env changes
+   ssh hetzner "cd /opt/floe-backend && pm2 restart floe-backend --update-env"
+   
+   # Verify environment variables are actually loaded
+   ssh hetzner "curl -s -I http://localhost:8080/api/auth/google | grep client_id"
    ```
 
 ### Log Locations
 
-- API Logs: `/opt/voice-assistant/logs/api-*.log`
-- Worker Logs: `/opt/voice-assistant/logs/worker-*.log`
-- PM2 Logs: `~/.pm2/logs/`
-- System Logs: `/var/log/syslog`
+- **Application Logs**: `/opt/floe-backend/logs/`
+  - `combined.log` - All application logs
+  - `error.log` - Error logs only
+- **PM2 Logs**: `~/.pm2/logs/`
+  - `floe-backend-out-0.log` - Stdout from instance 0
+  - `floe-backend-error-0.log` - Stderr from instance 0
+  - `floe-backend-out-1.log` - Stdout from instance 1
+  - `floe-backend-error-1.log` - Stderr from instance 1
+- **System Logs**: `/var/log/syslog`
 
 ### Performance Monitoring
 
@@ -201,24 +373,34 @@ ssh hetzner 'free -h'
 ssh hetzner 'pm2 monit'
 
 # Database performance
-ssh hetzner 'cd /app && npx prisma db pull'
+ssh hetzner 'psql -d floedb -U floeuser -c "SELECT count(*) FROM users;"'
+ssh hetzner 'psql -d floedb -U floeuser -c "SELECT count(*) FROM conversations;"'
+
+# Check API response time
+time curl https://floe.cognetica.de/health
 ```
 
 ## Backup and Recovery
 
 ### Database Backup
 ```bash
-# Create backup
-ssh hetzner 'pg_dump voice_assistant > /backup/voice_assistant_$(date +%Y%m%d_%H%M%S).sql'
+# Create backup of floedb
+ssh hetzner 'pg_dump -U floeuser floedb > /backup/floedb_$(date +%Y%m%d_%H%M%S).sql'
 
 # Restore backup
-ssh hetzner 'psql voice_assistant < /backup/voice_assistant_backup.sql'
+ssh hetzner 'psql -U floeuser floedb < /backup/floedb_backup.sql'
+
+# Create compressed backup
+ssh hetzner 'pg_dump -U floeuser floedb | gzip > /backup/floedb_$(date +%Y%m%d_%H%M%S).sql.gz'
 ```
 
 ### Environment Backup
 ```bash
 # Backup environment and logs
-ssh hetzner 'tar -czf /backup/app_backup_$(date +%Y%m%d_%H%M%S).tar.gz /app/.env /opt/voice-assistant/logs/'
+ssh hetzner 'tar -czf /backup/floe_backup_$(date +%Y%m%d_%H%M%S).tar.gz /opt/floe-backend/.env /opt/floe-backend/logs/ /opt/floe-backend/google-credentials.json'
+
+# Backup entire application directory
+ssh hetzner 'tar -czf /backup/floe_full_backup_$(date +%Y%m%d_%H%M%S).tar.gz /opt/floe-backend/'
 ```
 
 ## Security
