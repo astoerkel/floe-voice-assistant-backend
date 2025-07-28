@@ -1,6 +1,5 @@
-const oauthService = require('../services/auth/oauth');
+const oauthService = require('../services/auth/oauth.production');
 const jwtService = require('../services/auth/jwt');
-const { prisma } = require('../config/database');
 const logger = require('../utils/logger');
 const { body, validationResult } = require('express-validator');
 
