@@ -1,12 +1,24 @@
 const express = require('express');
 const router = express.Router();
-const { controller, appleSignInValidation, updateProfileValidation } = require('../controllers/auth.controller');
-const { authenticateToken, optionalAuth } = require('../services/auth/middleware');
+const { 
+  controller, 
+  appleSignInValidation, 
+  googleSignInValidation,
+  registerValidation,
+  loginValidation,
+  updateProfileValidation 
+} = require('../controllers/auth.controller');
+const { authenticateToken, optionalAuth } = require('../middleware/auth');
 
-// Authentication routes
+// Email/Password Authentication
+router.post('/register', registerValidation, controller.register);
+router.post('/login', loginValidation, controller.login);
+
+// Social Authentication
 router.post('/apple-signin', appleSignInValidation, controller.appleSignIn);
-router.get('/google-oauth/init', controller.googleOAuthInit);
-router.get('/google-oauth/callback', controller.googleOAuthCallback);
+router.post('/google-signin', googleSignInValidation, controller.googleSignIn);
+
+// Token Management
 router.post('/refresh', controller.refreshToken);
 router.delete('/logout', optionalAuth, controller.logout);
 

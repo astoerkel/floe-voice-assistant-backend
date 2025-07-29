@@ -1,6 +1,4 @@
-const oauthService = require('../services/auth/oauth');
-const jwtService = require('../services/auth/jwt');
-const { prisma } = require('../config/database');
+const authService = require('../services/auth/auth.production');
 const logger = require('../utils/logger');
 const { body, validationResult } = require('express-validator');
 
@@ -15,7 +13,7 @@ class AuthController {
       
       const { idToken, user } = req.body;
       
-      const result = await oauthService.handleAppleAuth(idToken, user);
+      const result = await authService.handleAppleAuth(idToken, user);
       
       res.json({
         success: true,
@@ -33,7 +31,8 @@ class AuthController {
   async googleOAuthInit(req, res) {
     try {
       const { state } = req.query;
-      const authUrl = await oauthService.getGoogleAuthUrl(state);
+      // Google OAuth now handled via ID token, not redirect flow
+      res.status(501).json({ error: 'Google OAuth redirect flow not implemented. Use ID token authentication.' });
       
       res.json({
         success: true,
@@ -54,7 +53,8 @@ class AuthController {
         return res.status(400).json({ error: 'Authorization code required' });
       }
       
-      await oauthService.handleGoogleCallback(code);
+      // Google OAuth now handled via ID token, not redirect flow
+      res.status(501).json({ error: 'Google OAuth callback not implemented. Use ID token authentication.' });
       
       res.json({
         success: true,
@@ -75,7 +75,7 @@ class AuthController {
         return res.status(400).json({ error: 'Refresh token required' });
       }
       
-      const tokens = await jwtService.refreshAccessToken(refreshToken);
+      const tokens = await authService.refreshAccessToken(refreshToken);
       
       res.json({
         success: true,
@@ -94,12 +94,12 @@ class AuthController {
       const { refreshToken } = req.body;
       
       if (refreshToken) {
-        await jwtService.revokeRefreshToken(refreshToken);
+        await authService.revokeRefreshToken(refreshToken);
       }
       
       // If authenticated, revoke all tokens
       if (req.user) {
-        await jwtService.revokeAllUserTokens(req.user.id);
+        await authService.revokeAllUserTokens(req.user.id);
       }
       
       res.json({
@@ -115,25 +115,7 @@ class AuthController {
   // Get user profile
   async getProfile(req, res) {
     try {
-      const user = await prisma.user.findUnique({
-        where: { id: req.user.id },
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          profilePicture: true,
-          createdAt: true,
-          lastActive: true,
-          integrations: {
-            select: {
-              id: true,
-              type: true,
-              isActive: true,
-              createdAt: true
-            }
-          }
-        }
-      });
+      const user = await authService.getUserById(req.user.id);
       
       if (!user) {
         return res.status(404).json({ error: 'User not found' });
@@ -141,7 +123,14 @@ class AuthController {
       
       res.json({
         success: true,
-        user
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          authProvider: user.auth_provider,
+          createdAt: user.created_at,
+          lastActive: user.last_active
+        }
       });
     } catch (error) {
       logger.error('Get profile failed:', error);
@@ -159,21 +148,17 @@ class AuthController {
       
       const { name } = req.body;
       
-      const user = await prisma.user.update({
-        where: { id: req.user.id },
-        data: { name },
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          profilePicture: true,
-          lastActive: true
-        }
-      });
+      const user = await authService.updateUserProfile(req.user.id, { name });
       
       res.json({
         success: true,
-        user
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          authProvider: user.auth_provider,
+          lastActive: user.last_active
+        }
       });
     } catch (error) {
       logger.error('Update profile failed:', error);
@@ -189,9 +174,7 @@ class AuthController {
       // For OAuth-only users, we might not have password
       // This is a placeholder for future password verification
       
-      await prisma.user.delete({
-        where: { id: req.user.id }
-      });
+      await authService.deleteUser(req.user.id);
       
       res.json({
         success: true,
@@ -200,6 +183,78 @@ class AuthController {
     } catch (error) {
       logger.error('Delete account failed:', error);
       res.status(500).json({ error: 'Failed to delete account' });
+    }
+  }
+
+  // Email/Password Registration
+  async register(req, res) {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ error: 'Validation failed', details: errors.array() });
+      }
+      
+      const { email, password, name } = req.body;
+      
+      const result = await authService.registerUser(email, password, name);
+      
+      res.status(201).json({
+        success: true,
+        user: result.user,
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken
+      });
+    } catch (error) {
+      logger.error('Registration failed:', error);
+      res.status(400).json({ error: error.message });
+    }
+  }
+
+  // Email/Password Login
+  async login(req, res) {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ error: 'Validation failed', details: errors.array() });
+      }
+      
+      const { email, password } = req.body;
+      
+      const result = await authService.loginUser(email, password);
+      
+      res.json({
+        success: true,
+        user: result.user,
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken
+      });
+    } catch (error) {
+      logger.error('Login failed:', error);
+      res.status(400).json({ error: error.message });
+    }
+  }
+
+  // Google Sign In
+  async googleSignIn(req, res) {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ error: 'Validation failed', details: errors.array() });
+      }
+      
+      const { idToken } = req.body;
+      
+      const result = await authService.handleGoogleAuth(idToken);
+      
+      res.json({
+        success: true,
+        user: result.user,
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken
+      });
+    } catch (error) {
+      logger.error('Google Sign In failed:', error);
+      res.status(400).json({ error: error.message });
     }
   }
 }
@@ -211,6 +266,21 @@ const appleSignInValidation = [
   body('user.email').optional().isEmail().withMessage('Valid email is required')
 ];
 
+const googleSignInValidation = [
+  body('idToken').notEmpty().withMessage('ID token is required')
+];
+
+const registerValidation = [
+  body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+  body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
+  body('name').notEmpty().trim().isLength({ min: 1, max: 100 }).withMessage('Name must be 1-100 characters')
+];
+
+const loginValidation = [
+  body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+  body('password').notEmpty().withMessage('Password is required')
+];
+
 const updateProfileValidation = [
   body('name').optional().isString().trim().isLength({ min: 1, max: 100 }).withMessage('Name must be 1-100 characters')
 ];
@@ -220,5 +290,8 @@ const controller = new AuthController();
 module.exports = {
   controller,
   appleSignInValidation,
+  googleSignInValidation,
+  registerValidation,
+  loginValidation,
   updateProfileValidation
 };
