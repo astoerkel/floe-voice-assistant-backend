@@ -206,11 +206,11 @@ class GoogleCalendarIntegrationProduction {
   async isIntegrationActive(userId) {
     try {
       const result = await db.query(
-        'SELECT google_services_connected FROM users WHERE id = $1',
+        'SELECT google_access_token FROM users WHERE id = $1',
         [userId]
       );
 
-      if (result.rows.length === 0 || !result.rows[0].google_services_connected) {
+      if (result.rows.length === 0 || !result.rows[0].google_access_token) {
         logger.info(`Calendar integration not active for user ${userId}`);
         return false;
       }
@@ -222,9 +222,9 @@ class GoogleCalendarIntegrationProduction {
         return true;
       } catch (error) {
         logger.error(`Calendar integration token validation failed for user ${userId}:`, error.message);
-        // Mark as inactive if tokens don't work
+        // Clear tokens if they don't work
         await db.query(
-          'UPDATE users SET google_services_connected = false WHERE id = $1',
+          'UPDATE users SET google_access_token = NULL, google_refresh_token = NULL WHERE id = $1',
           [userId]
         );
         return false;
