@@ -2,7 +2,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { OAuth2Client } = require('google-auth-library');
 const appleSignin = require('apple-signin-auth');
-const db = require('../../config/database');
+const db = require('../../config/databasePool');
 const logger = require('../../utils/logger');
 
 class AuthService {

@@ -216,9 +216,8 @@ class GoogleOAuthService {
             // Generate JWT token for the user if this is a public OAuth flow
             let jwtToken = null;
             if (sessionData && sessionData.deviceId) {
-                const JWTService = require('../auth/jwt.production');
-                const jwt = new JWTService();
-                const jwtTokens = jwt.generateTokens(userId);
+                const jwtService = require('../auth/jwt.production');
+                const jwtTokens = jwtService.generateTokens(userId);
                 jwtToken = jwtTokens.accessToken;
                 
                 logger.info(`Generated JWT token for public OAuth flow, user ${userId}`);

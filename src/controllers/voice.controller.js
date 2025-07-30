@@ -1,5 +1,5 @@
 const coordinatorAgent = require('../services/agents/coordinatorAgent');
-const VoiceAssistantCoordinator = require('../services/ai/coordinator');
+const CoordinatorFactory = require('../services/ai/coordinatorFactory');
 const speechToText = require('../services/ai/speechToText');
 const textToSpeech = require('../services/ai/textToSpeech');
 const speechAnalytics = require('../services/analytics/speechAnalytics');
@@ -10,7 +10,19 @@ const queueService = require('../services/queue');
 
 class VoiceController {
   constructor() {
-    this.coordinator = new VoiceAssistantCoordinator();
+    // Use factory to create coordinator with appropriate database configuration
+    this.initializeCoordinator();
+  }
+
+  async initializeCoordinator() {
+    try {
+      this.coordinator = await CoordinatorFactory.createCoordinator();
+      logger.info('Voice controller coordinator initialized successfully');
+    } catch (error) {
+      logger.error('Failed to initialize coordinator:', error);
+      // Fallback to legacy coordinator
+      this.coordinator = null;
+    }
   }
 
   // Process text-only command (primary method for Apple Speech Framework)
@@ -87,8 +99,17 @@ class VoiceController {
       // Try new LangChain coordinator first, fallback to legacy on failure
       let result;
       try {
-        result = await this.coordinator.processRequest(userId, text, enhancedContext);
-        logger.info(`LangChain coordinator processed: ${text.substring(0, 50)}...`);
+        // Ensure coordinator is initialized
+        if (!this.coordinator) {
+          await this.initializeCoordinator();
+        }
+        
+        if (this.coordinator) {
+          result = await this.coordinator.processRequest(userId, text, enhancedContext);
+          logger.info(`LangChain coordinator processed: ${text.substring(0, 50)}...`);
+        } else {
+          throw new Error('Coordinator not available');
+        }
       } catch (langchainError) {
         logger.warn('LangChain coordinator failed, falling back to legacy:', langchainError.message);
         result = await coordinatorAgent.processVoiceCommand(userId, text, enhancedContext);

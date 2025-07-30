@@ -115,9 +115,17 @@ class AuthController {
   // Get user profile
   async getProfile(req, res) {
     try {
+      // req.user is set by authenticateToken middleware
+      if (!req.user || !req.user.id) {
+        logger.error('Get profile failed: No user in request');
+        return res.status(401).json({ error: 'User not authenticated' });
+      }
+      
+      logger.info(`Getting profile for user ${req.user.id}`);
       const user = await authService.getUserById(req.user.id);
       
       if (!user) {
+        logger.error(`User not found: ${req.user.id}`);
         return res.status(404).json({ error: 'User not found' });
       }
       
@@ -134,7 +142,11 @@ class AuthController {
       });
     } catch (error) {
       logger.error('Get profile failed:', error);
-      res.status(500).json({ error: 'Failed to get profile' });
+      logger.error('Error stack:', error.stack);
+      res.status(500).json({ 
+        error: 'Failed to get profile',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     }
   }
 

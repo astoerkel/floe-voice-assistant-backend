@@ -1,7 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const oauthController = require('../controllers/oauth.controller');
-const { authenticateToken, optionalAuth } = require('../services/auth/middleware');
+const OAuthControllerFactory = require('../controllers/oauth.factory');
+const oauthController = OAuthControllerFactory.createController();
+const logger = require('../utils/logger');
+
+// CRITICAL: Use production middleware for OAuth routes to avoid Prisma in production
+const { authenticateToken, optionalAuth } = require('../middleware/auth.production');
+logger.info('OAuth routes: Using production auth middleware (PostgreSQL direct)');
 
 // Public OAuth endpoints (no authentication required)
 router.post('/public/google/init', oauthController.initGoogleOAuthPublic.bind(oauthController));

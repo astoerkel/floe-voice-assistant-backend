@@ -314,7 +314,10 @@ class OAuthControllerDirect {
         try {
             const userId = req.user?.id;
             
+            logger.info(`getIntegrations called for user: ${userId}, user object:`, req.user);
+            
             if (!userId) {
+                logger.info('No userId found, returning empty integrations');
                 return res.json({
                     success: true,
                     integrations: []
@@ -346,6 +349,8 @@ class OAuthControllerDirect {
                 )
             `, [userId]);
             
+            logger.info(`Database query returned ${result.rows.length} rows:`, result.rows);
+            
             const integrations = result.rows.map(row => ({
                 id: `${row.type}_${userId}`,
                 type: row.type,
@@ -357,6 +362,8 @@ class OAuthControllerDirect {
                     ['calendar', 'gmail', 'drive'] : 
                     ['base:read', 'base:write']
             }));
+            
+            logger.info(`Returning ${integrations.length} integrations:`, integrations);
             
             res.json({
                 success: true,

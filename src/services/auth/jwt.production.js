@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const db = require('../../config/database');
+const db = require('../../config/databasePool');
 
 class JWTService {
   constructor() {

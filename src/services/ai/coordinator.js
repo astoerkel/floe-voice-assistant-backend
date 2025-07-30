@@ -6,8 +6,7 @@ const logger = require('../../utils/logger');
 const { prisma } = require('../../config/database');
 
 // Import existing service integrations
-const GoogleCalendarIntegration = require('../integrations/google/calendar');
-const GmailIntegration = require('../integrations/google/gmail');
+const GoogleIntegrationFactory = require('../integrations/google/factory');
 const AirtableTasksIntegration = require('../integrations/airtable/tasks');
 
 // Import agent utilities
@@ -28,9 +27,9 @@ class VoiceAssistantCoordinator {
     // Initialize primary LLM (OpenRouter) with OpenAI fallback for production
     this.initializeLLMs();
 
-    // Initialize service integrations
-    this.calendarService = new GoogleCalendarIntegration();
-    this.gmailService = new GmailIntegration();
+    // Initialize service integrations using factories
+    this.calendarService = GoogleIntegrationFactory.createCalendarService();
+    this.gmailService = GoogleIntegrationFactory.createGmailService();
     this.airtableService = AirtableTasksIntegration;
 
     // Initialize utilities
