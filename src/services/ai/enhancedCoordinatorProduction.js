@@ -652,8 +652,27 @@ Guidelines:
       const executor = await this.createAgentExecutor(userId);
 
       // Update context
-      const conversationContext = await this.contextManager.updateContext(userId, userInput, context);
-
+      let conversationContext;
+      try {
+        conversationContext = await this.contextManager.updateContext(userId, userInput, context);
+      } catch (error) {
+        logger.warn('ContextManager failed, using fallback context:', error.message);
+        // Fallback context when contextManager fails (e.g., Prisma not available)
+        conversationContext = {
+          userId,
+          userInput,
+          sessionId: context.sessionId,
+          platform: context.platform,
+          timestamp: new Date().toISOString()
+        };
+      }
+      
+      // Override integrationStatus with the one from iOS if available
+      if (context.integrations) {
+        logger.info('Using integration status from iOS app:', JSON.stringify(context.integrations));
+        conversationContext.integrationStatus = context.integrations;
+      }
+      
       // Execute the agent
       const startTime = Date.now();
       const result = await executor.invoke({
