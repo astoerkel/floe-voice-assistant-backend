@@ -85,6 +85,9 @@ class VoiceController {
         // Continue with default values - this allows the system to work without database
       }
 
+      // Extract integration status from context.connectedServices (where iOS sends it)
+      const extractedIntegrations = context.connectedServices || integrations || {};
+      
       // Add platform-specific context
       const enhancedContext = {
         ...context,
@@ -93,7 +96,8 @@ class VoiceController {
         transcriptionMethod: 'apple_speech',
         sessionId: context.sessionId || `session_${Date.now()}_${userId}`,
         startTime,
-        integrations // Pass OAuth integration status from iOS app
+        integrations: extractedIntegrations, // Pass OAuth integration status
+        connectedServices: extractedIntegrations // Also pass as connectedServices for compatibility
       };
 
       // For now, use legacy coordinator that works without Prisma

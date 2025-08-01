@@ -34,15 +34,21 @@ class EmailAgent {
       logger.info(`⚡ LangChain EmailAgent handling request for user ${userId}: "${userInput}"`);
       logger.info(`⚡ LangChain EmailAgent context received: ${JSON.stringify(context, null, 2)}`);
 
-      // Check if email integration is available from iOS app context first
-      const isEmailActiveFromContext = context?.integrations?.google?.connected === true;
+      // Check if email integration is available from iOS app context
+      // iOS sends it as 'connectedServices' in the context
+      const isEmailActiveFromContext = context?.connectedServices?.google?.connected === true;
+      const isEmailActiveFromIntegrations = context?.integrations?.google?.connected === true;
       
-      // Also check sessionData for integrations (where iOS sends it)
+      // Also check sessionData for integrations
       const isEmailActiveFromSession = context?.sessionData?.integrations?.google?.connected === true;
+      const isEmailActiveFromSessionConnected = context?.sessionData?.connectedServices?.google?.connected === true;
       
       // Only check database if context doesn't provide integration status
-      let isEmailActive = isEmailActiveFromContext || isEmailActiveFromSession;
-      if (!isEmailActive && !context?.integrations && !context?.sessionData?.integrations) {
+      let isEmailActive = isEmailActiveFromContext || isEmailActiveFromIntegrations || isEmailActiveFromSession || isEmailActiveFromSessionConnected;
+      
+      logger.info(`Email integration check - connectedServices: ${JSON.stringify(context?.connectedServices)}, integrations: ${JSON.stringify(context?.integrations)}, sessionData: ${JSON.stringify(context?.sessionData)}, isEmailActive: ${isEmailActive}`);
+      
+      if (!isEmailActive && !context?.connectedServices && !context?.integrations && !context?.sessionData?.integrations && !context?.sessionData?.connectedServices) {
         try {
           isEmailActive = await this.emailService.isIntegrationActive(userId);
         } catch (error) {
@@ -50,8 +56,6 @@ class EmailAgent {
           isEmailActive = false;
         }
       }
-      
-      logger.info(`Email integration check - contextIntegrations: ${JSON.stringify(context?.integrations)}, sessionIntegrations: ${JSON.stringify(context?.sessionData?.integrations)}, isEmailActive: ${isEmailActive}`);
       
       if (!isEmailActive) {
         return this.handleNoEmailIntegration(userInput);
