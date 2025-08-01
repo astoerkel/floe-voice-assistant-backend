@@ -96,24 +96,10 @@ class VoiceController {
         integrations // Pass OAuth integration status from iOS app
       };
 
-      // Try new LangChain coordinator first, fallback to legacy on failure
-      let result;
-      try {
-        // Ensure coordinator is initialized
-        if (!this.coordinator) {
-          await this.initializeCoordinator();
-        }
-        
-        if (this.coordinator) {
-          result = await this.coordinator.processRequest(userId, text, enhancedContext);
-          logger.info(`LangChain coordinator processed: ${text.substring(0, 50)}...`);
-        } else {
-          throw new Error('Coordinator not available');
-        }
-      } catch (langchainError) {
-        logger.warn('LangChain coordinator failed, falling back to legacy:', langchainError.message);
-        result = await coordinatorAgent.processVoiceCommand(userId, text, enhancedContext);
-      }
+      // For now, use legacy coordinator that works without Prisma
+      // The enhanced coordinator has Prisma dependencies through ContextManager
+      logger.info('Using legacy coordinator for production stability');
+      const result = await coordinatorAgent.processVoiceCommand(userId, text, enhancedContext);
 
       // Generate voice response
       const audioResponse = await this.generateVoiceResponse(

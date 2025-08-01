@@ -37,13 +37,21 @@ class EmailAgent {
       // Check if email integration is available from iOS app context first
       const isEmailActiveFromContext = context?.integrations?.google?.connected === true;
       
+      // Also check sessionData for integrations (where iOS sends it)
+      const isEmailActiveFromSession = context?.sessionData?.integrations?.google?.connected === true;
+      
       // Only check database if context doesn't provide integration status
-      let isEmailActive = isEmailActiveFromContext;
-      if (!context?.integrations) {
-        isEmailActive = await this.emailService.isIntegrationActive(userId);
+      let isEmailActive = isEmailActiveFromContext || isEmailActiveFromSession;
+      if (!isEmailActive && !context?.integrations && !context?.sessionData?.integrations) {
+        try {
+          isEmailActive = await this.emailService.isIntegrationActive(userId);
+        } catch (error) {
+          logger.error('Failed to check email integration status:', error);
+          isEmailActive = false;
+        }
       }
       
-      logger.info(`Email integration check - context: ${JSON.stringify(context?.integrations)}, isEmailActive: ${isEmailActive}`);
+      logger.info(`Email integration check - contextIntegrations: ${JSON.stringify(context?.integrations)}, sessionIntegrations: ${JSON.stringify(context?.sessionData?.integrations)}, isEmailActive: ${isEmailActive}`);
       
       if (!isEmailActive) {
         return this.handleNoEmailIntegration(userInput);
